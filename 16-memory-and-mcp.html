@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memory and MCP · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow flow">Part 3 · Building the flow · Chapter 16</p>
+    <h1>Memory and MCP</h1>
+    <p class="lead">Two loose ends of building a flow. Memory: how an app built on a stateless model remembers a
+      conversation. MCP: a standard plug for tools, so the same tool can serve many AI apps. Both are words you
+      will hear in every project.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow flow">The problem</p>
+      <h2>The model forgets, and every app rebuilds the same tools</h2>
+      <p><strong>Memory.</strong> Maria asks whether she can take 10 days off, gets "no", and follows up:
+        <em>"And would it be enough for 5 days instead?"</em> On its own that sentence means nothing: enough of
+        what, for whom? The model keeps no state between calls (chapter 1). If the app does not carry the
+        conversation, nobody does.</p>
+      <p><strong>Tools.</strong> Chapter 12's holiday lookup is a Python function inside one app. The chat
+        assistant, the coding assistant and the support bot each want the same lookup, and each would write it
+        again in its own format. Tools need a socket that fits them all.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow flow">The picture</p>
+      <h2>Three kinds of memory, one kind of plug</h2>
+      <table>
+        <tr><th>Memory</th><th>What it holds</th><th>Where it lives</th><th>Backend analogy</th></tr>
+        <tr><td><strong>Conversation history</strong></td><td>What was said in this conversation.</td><td>Resent in the prompt on every call.</td><td>A session.</td></tr>
+        <tr><td><strong>Working state</strong></td><td>What the flow has found and decided during this run.</td><td>The graph's state (chapter 15).</td><td>Request-scoped variables.</td></tr>
+        <tr><td><strong>Long-term memory</strong></td><td>Facts that should outlive the conversation: preferences, past decisions.</td><td>A database, searched when relevant.</td><td>A user profile table. Retrieval again (Part 2).</td></tr>
+      </table>
+      <h3>MCP: tools behind a standard protocol</h3>
+      <ol class="steps wide">
+        <li class="node plain"><b>Your AI app</b><span>the "host": a chat app, an IDE, your own agent</span></li>
+        <li class="node flow new"><b>MCP client</b><span>inside the app; speaks the protocol</span></li>
+        <li class="node flow new"><b>MCP server</b><span>a separate program offering tools, data and prompts</span></li>
+        <li class="node plain"><b>The real system</b><span>HR database, GitHub, files, a search engine</span></li>
+      </ol>
+      <p class="caption">The Model Context Protocol (MCP) is an open standard, introduced by Anthropic in late
+        2024 and since adopted widely. The client asks the server "which tools do you offer?", gets names,
+        descriptions and argument schemas, and can then call them. It does for AI tools what the Language Server
+        Protocol did for editors: write the server once, use it from every client.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow flow">How it works</p>
+      <h2>Memory is state you send again</h2>
+
+      <h3>The same follow-up, with and without memory</h3>
+      <p>The graph from chapter 15 saves its state per conversation ID. Two real runs of the follow-up
+        <em>"And would it be enough for 5 days instead?"</em>:</p>
+      <div class="ranks wide">
+        <div class="retrieval"><h4>Same conversation as Maria's first question</h4><p style="font-size: 0.95rem; color: var(--ink)">"Yes, you have enough holiday days left for 5 days. You have 7 days remaining, which is more than the 5 days you are requesting."</p><p>The saved history told the router who is asking and what "it" refers to.</p></div>
+        <div class="reliability"><h4>A new conversation</h4><p style="font-size: 0.95rem; color: var(--ink)">"Yes, full-time employees receive 25 days of paid holiday per year, and up to 5 unused days can carry over to the next year."</p><p>Fluent, confident, and not an answer to the question. It does not know who is asking.</p></div>
+      </div>
+      <p>"Memory" here is nothing more than this: the earlier questions and answers are stored, and put back
+        into the prompt on the next turn.</p>
+
+      <h3>History grows; the window and the bill do not forgive</h3>
+      <p>Every turn resends everything before it, so the cost of a conversation grows with the square of its
+        length. Three standard ways to keep it in check:</p>
+      <table>
+        <tr><th>Strategy</th><th>How</th><th>Loses</th></tr>
+        <tr><td><strong>Window</strong></td><td>Keep only the last N turns.</td><td>Anything said earlier, completely.</td></tr>
+        <tr><td><strong>Summary</strong></td><td>A model call condenses older turns into a paragraph that stays in the prompt.</td><td>Detail, and it costs an extra call.</td></tr>
+        <tr><td><strong>Retrieve</strong></td><td>Store all turns; search for the ones relevant to the new message.</td><td>Whatever the search misses. This is RAG over the conversation.</td></tr>
+      </table>
+      <p>Most apps start with a window and add a summary when conversations get long.</p>
+      <div class="callout reliability">
+        <p><strong>Memory is personal data.</strong> What users tell an assistant gets stored. Decide what is
+          kept, for how long, and how a user can see and delete it. And never let one user's memory be searched
+          for another user's question: filter by user in the query, as in chapter 6.</p>
+      </div>
+
+      <h3>MCP: a server and a client, for real</h3>
+      <p>The holiday lookup as an MCP server is the same function with a different decorator:</p>
+      <pre class="code"><code>from mcp.server.mcpserver import MCPServer
+
+server = MCPServer("hr-tools")
+
+@server.tool()
+def holiday_days_left(employee: str) -> str:
+    """How many paid holiday days an employee has left this year. Needs the employee's full name."""
+    if employee not in HOLIDAY_DAYS_LEFT:
+        return f"No employee called {employee!r}."   # a readable error (chapter 12), never a made-up 0
+    return f"{employee} has {HOLIDAY_DAYS_LEFT[employee]} holiday days left this year."
+
+if __name__ == "__main__":
+    server.run()      # stdio: the client starts this file as a subprocess and talks over stdin/stdout</code></pre>
+      <p>Any MCP client can now discover and call it, without knowing it is Python or what it talks to:</p>
+      <pre class="code"><code>from mcp import Client
+from mcp.client.stdio import StdioServerParameters
+
+async with Client(StdioServerParameters(command=sys.executable, args=["mcp_server.py"])) as client:
+    for tool in (await client.list_tools()).tools:
+        print("tool:", tool.name, "-", tool.description)
+    result = await client.call_tool("holiday_days_left", {"employee": "Maria Lind"})
+    print("result:", result.content[0].text)</code></pre>
+      <div class="out-box">tool: holiday_days_left - How many paid holiday days an employee has left this year. Needs the employee's full name.
+result: Maria Lind has 7 holiday days left this year.</div>
+      <table>
+        <tr><th>An MCP server can offer</th><th>What it is</th></tr>
+        <tr><td><strong>Tools</strong></td><td>Functions the model may ask to call. By far the most used part.</td></tr>
+        <tr><td><strong>Resources</strong></td><td>Data the app can read and put into the prompt: files, records.</td></tr>
+        <tr><td><strong>Prompts</strong></td><td>Reusable prompt templates the user can pick.</td></tr>
+      </table>
+      <p>Servers run either as a local subprocess (stdio, as above) or as a remote service over HTTP.</p>
+      <div class="callout reliability">
+        <p><strong>An MCP server is code you trust.</strong> Its tool descriptions go straight into your model's
+          prompt and its tools act with whatever access you give them. Installing an unknown server is like
+          installing an unknown package that can also talk your model into things. Use servers from sources you
+          trust, and give each the narrowest permissions that work.</p>
+      </div>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow flow">Use it when, skip it when</p>
+      <h2>How much of each do you need?</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Add it when</h3>
+          <ul>
+            <li><strong>Conversation history:</strong> the product is a chat. Follow-up questions are the whole point.</li>
+            <li><strong>Long-term memory:</strong> users come back and expect the app to know them.</li>
+            <li><strong>MCP:</strong> a tool should be usable from several apps, or you want to plug existing servers (GitHub, a database, a browser) into your agent or your coding assistant.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip it when</h3>
+          <ul>
+            <li><strong>Any memory:</strong> the app is one-shot: classify this, extract that, answer a single search. Stateless is simpler, cheaper and easier to test.</li>
+            <li><strong>Long-term memory:</strong> you have no clear idea what is worth remembering. A wrong memory is worse than none.</li>
+            <li><strong>MCP:</strong> the tool is used by one app. A plain function (chapter 12) is less to run.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow flow">The tools</p>
+      <h2>The names in this slot</h2>
+      <table>
+        <tr><th>Slot</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Conversation state</td><td><strong>LangGraph checkpointers (this book)</strong> · your own table of messages</td><td>A <code>messages</code> table keyed by conversation ID is a perfectly good memory.</td></tr>
+        <tr><td>Long-term memory</td><td>Mem0 · Zep · Letta · a vector database you already run</td><td>They extract facts from conversations and retrieve them later.</td></tr>
+        <tr><td>MCP</td><td><strong>The official <code>mcp</code> SDKs (this book: Python)</strong> · SDKs for TypeScript, Go and others</td><td>Many assistants and IDEs can act as MCP clients, and public registries list ready-made servers.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow flow">In the docs assistant</p>
+      <h2>A conversation ID is all it takes</h2>
+      <pre class="code"><code>def answer_node(state: State) -> State:
+    earlier = "\n".join(state.get("history", []))
+    passages = state["passages"] + (f"\n[Earlier in this conversation]\n{earlier}" if earlier else "")
+    answer = write_answer(state["question"], passages)
+    # The history is part of the state, so the checkpointer saves it with everything else.
+    return {"answer": answer, "history": [*state.get("history", []), f"Q: {state['question']}", f"A: {answer}"]}
+
+conversation = {"configurable": {"thread_id": "maria-1"}}
+app.invoke({"question": "I'm Maria Lind. I want to take 10 days off next month. Do I have enough holiday left?"}, conversation)
+app.invoke({"question": "And would it be enough for 5 days instead?"}, conversation)     # same ID: it remembers</code></pre>
+      <p>The router also receives the history, which is how it knew the follow-up was about Maria's holiday.
+        With <code>InMemorySaver</code> the memory lasts as long as the process; a SQLite or Postgres saver makes
+        it survive a restart.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> <code>uv run python app/mcp_client.py</code> starts
+          the MCP server and calls its tool. If you use an assistant or an IDE that supports MCP, point it at
+          <code>app/mcp_server.py</code> and ask it how many holiday days Tom Ek has left.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow flow">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="Memory">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">Memory</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-7" data-sections="Memory: Helping LLMs to Remember Conversations|Conversation Buffer|Windowed Conversation Buffer|Conversation Summary">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 7 · Advanced Text Generation Techniques and Tools</strong>
+          <span class="ref-sections">Memory: Helping LLMs to Remember Conversations · Conversation Buffer · Windowed Conversation Buffer · Conversation Summary</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-8" data-sections="Building a Conversational Agent|Managing Conversations">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 8 · Conversational Agency</strong>
+          <span class="ref-sections">Building a Conversational Agent · Managing Conversations</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li><strong>None of the three books covers MCP.</strong> That part rests on the protocol's own documentation and on code run on 2026-11-22 with version 2.3 of the <code>mcp</code> Python package. Version 1 of the package used different class names, so check which version an example was written for. Resources, prompts and the HTTP transport are described from the documentation and were not run here.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

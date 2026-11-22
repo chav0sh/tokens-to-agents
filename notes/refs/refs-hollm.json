@@ -1,0 +1,135 @@
+{
+  "HOLLM-1": {
+    "chapter": "An Introduction to Large Language Models",
+    "about": "A scene-setting chapter that traces Language AI from bag-of-words through embeddings and attention to today's encoder-only and decoder-only models. It ends with the practical choices a builder faces: closed or open models, how much GPU memory you need, and loading a first model with Hugging Face Transformers.",
+    "ideas": [
+      "Training an LLM is usually two steps: pretraining on huge text to predict the next word, then fine-tuning for a task such as following instructions. Most teams only ever do the second step or none.",
+      "A base model from pretraining does not follow instructions. The helpful chat behaviour comes from fine-tuning.",
+      "Using an LLM means loading two things: the model and its tokenizer, which splits the text into tokens before the model sees it.",
+      "Models can answer fluently and be wrong, and the chapter lists harmful output, intellectual property and regulation as risks to plan for.",
+      "GPU memory (VRAM) decides which open models you can run at all, and quantization is the main way to fit a model in less of it.",
+      "Frameworks change fast. The authors teach the shared ideas so you can pick up another framework easily."
+    ],
+    "read_when": "Read it when you need a first map of the field, or when you are deciding between a hosted API and a model you run yourself.",
+    "sections": {
+      "Proprietary, Private Models": "Explains that closed models such as GPT-4 or Claude are reached through an API, so you need no GPU and no hosting skills, and they tend to perform best. The costs are a paid service, no way to fine-tune the model yourself, and your data going to the provider, which is a problem for something like patient records.",
+      "Open Models": "Describes models whose weights are public, such as Llama, Mistral, Phi and Command R, that you can run locally, fine-tune and feed sensitive data. The price is needing strong hardware and setup knowledge, and licences vary, so some open models cannot be used commercially. The authors say they prefer open models where possible."
+    }
+  },
+  "HOLLM-2": {
+    "chapter": "Tokens and Embeddings",
+    "about": "Explains the two ideas under every LLM: tokens, the pieces text is cut into, and embeddings, the vectors that represent those pieces. It compares real tokenizers on the same text, then moves from token embeddings to whole-text embeddings and uses word embeddings for song recommendations.",
+    "ideas": [
+      "The model never sees your text. It sees a list of integer token IDs from the tokenizer, and it generates one token at a time.",
+      "Most modern tokenizers use subword tokens, which handle new words and keep a smaller vocabulary than whole-word tokens.",
+      "Tokenizers behave differently on capitalisation, numbers, code whitespace and other languages, depending on method, vocabulary size and training data.",
+      "A pretrained model is tied to its own tokenizer and holds one embedding vector per token in its vocabulary.",
+      "A text embedding model turns a sentence or document into one vector, which is the base for search, clustering and RAG.",
+      "The same embedding idea works outside language, for example to recommend songs from playlists."
+    ],
+    "read_when": "Read it when token counts, context limits or embedding vectors feel like black boxes and you want to see them in code.",
+    "sections": {
+      "LLM Tokenization": "Shows that a prompt is first turned into integer token IDs by a tokenizer, and the model's output IDs are decoded back to text by the same tokenizer. Using Phi-3 and Hugging Face Transformers, it prints the tokens of a prompt to show whole words, word pieces, punctuation and special start tokens. It then lists what decides the split: the tokenization method (BPE, WordPiece), the vocabulary and special-token choices, and the data the tokenizer was trained on.",
+      "Token Embeddings": "Says that a language model stores one embedding vector for every token in its tokenizer's vocabulary, which is why a model cannot swap tokenizers without retraining. It then shows that a model can turn tokens into contextualized embeddings, where the same word gets a different vector depending on its context, using a small DeBERTa model that returns one vector per token.",
+      "Text Embeddings (for Sentences and Whole Documents)": "Introduces models that return a single vector for a whole sentence or document, either by averaging token embeddings or, better, with a model trained for the job. The example uses the sentence-transformers library with all-mpnet-base-v2 to turn a sentence into a 768-value vector, and points forward to search and RAG as the main uses."
+    }
+  },
+  "HOLLM-6": {
+    "chapter": "Prompt Engineering",
+    "about": "A hands-on tour of prompting generative models: choosing and loading a model, the sampling settings that control randomness, the parts of a good prompt, and reasoning techniques. It ends with ways to control and validate output so an application does not break.",
+    "ideas": [
+      "Temperature and top_p set how random the output is, and a low setting suits tasks where you want the same answer each time.",
+      "A prompt is made of parts such as persona, instruction, context, output format, audience, tone and data. Add or remove one at a time and watch the effect.",
+      "Specificity is the most important prompting skill. Putting the instruction at the start or end helps because the middle of a long prompt is often forgotten.",
+      "Showing examples (few-shot) and asking for step-by-step reasoning both improve results on harder tasks.",
+      "Splitting one big task into several chained prompts gives each call its own focus and its own settings.",
+      "For production, validate output with examples, constrained sampling (grammar) or fine-tuning, because free-form text can break your code."
+    ],
+    "read_when": "Read it when you are writing or tuning prompts for a real feature and want a checklist of techniques with small code examples.",
+    "sections": {
+      "Controlling Model Output": "Explains that at each step the model scores every possible next token, and temperature and top_p decide how adventurous the choice is. Setting temperature to 0 or turning sampling off gives the most likely token every time, while higher values give varied answers. A table matches settings to uses, such as low values for email generation and high values for brainstorming.",
+      "The Basic Ingredients of a Prompt": "Shows that a prompt can be just text to complete, but a useful one adds an instruction and the data it applies to. An output indicator such as ending with \"Sentiment:\" nudges the model to answer in one word. It then lists specificity, a way to reduce hallucination (allow \"I don't know\") and instruction position as shared techniques, and builds up a larger prompt from persona, context, format, audience and tone.",
+      "In-Context Learning: Providing Examples": "Argues that showing the model examples works better than only describing the task. It defines zero-shot, one-shot and few-shot prompts and demonstrates a one-shot prompt with user and assistant turns that makes the model use an invented word correctly. It warns that examples are one piece of the puzzle and the model can still ignore them.",
+      "Chain Prompting: Breaking up the Problem": "Shows how to split a task across several prompts, feeding the output of one into the next, for example name, then slogan, then sales pitch. Each call can get its own settings, such as a short token limit for the name and a longer one for the pitch. It lists uses such as validating a previous answer, running prompts in parallel and merging them, and writing stories in stages.",
+      "Chain-of-Thought: Think Before Answering": "Shows that asking the model to write out its reasoning before the answer helps on multi-step problems like arithmetic, because each extra token gives it more to build on. It demonstrates both few-shot chain-of-thought with a worked example and the zero-shot version that just adds \"Let's think step-by-step\". The chapter also covers self-consistency (vote over several samples, n times slower) and tree-of-thought."
+    }
+  },
+  "HOLLM-7": {
+    "chapter": "Advanced Text Generation Techniques and Tools",
+    "about": "Uses LangChain to extend a plain LLM with reusable prompt templates, chained steps, conversation memory and agents. It stays practical, with small local models for chains and memory and GPT-3.5 for the agent example.",
+    "ideas": [
+      "A chain connects a prompt template to a model, so you define the template once and only pass variables.",
+      "Complex tasks can be split into a sequence of smaller prompts, where each output feeds the next and you can read each intermediate result.",
+      "LLMs are stateless, so \"memory\" means putting past conversation back into the prompt.",
+      "Memory types trade off speed, token use and accuracy: a full buffer is simple but grows, a window forgets older turns, a summary is compact but costs an extra model call.",
+      "An agent lets the model choose tools and the order of steps, using a loop of thought, action and observation (ReAct).",
+      "Agents run without a human checking each step, so the chapter says you must design for reliability, for example by returning sources."
+    ],
+    "read_when": "Read it when you are adding chat memory, chaining prompts or building a tool-using agent and want to see the moving parts in LangChain.",
+    "sections": {
+      "Agents: Creating a System of LLMs": "Defines an agent as a system where the model decides which actions to take and in what order, using tools plus a planning step. It explains ReAct, a loop of thought, action and observation, and builds a LangChain agent with web search and a calculator to find a laptop price and convert it to euros. It notes that smaller local models were not strong enough for this and that the lack of a human in the loop calls for careful design.",
+      "Model I/O: Loading Quantized Models with LangChain": "Shows how to load a quantized GGUF version of Phi-3 through llama-cpp-python and LangChain, and explains quantization as storing weights with fewer bits to save memory and run faster, with a small loss of precision. It gives a rule of thumb to prefer models of at least 4 bits, and shows that the model returned nothing until the correct prompt template was applied.",
+      "Chains: Extending the Capabilities of LLMs": "Introduces a chain as a link between an LLM and something extra, starting with a prompt template for Phi-3 so you do not repeat its special tokens. It then builds a sequential chain that writes a story title, then a character, then a summary, with each step feeding the next, and notes you get every intermediate piece as a separate output.",
+      "Memory: Helping LLMs to Remember Conversations": "Demonstrates that a bare LLM forgets your name from one call to the next because it is stateless. The fix is to pass earlier conversation back in the prompt. The section introduces three options (buffer, windowed buffer, summary) and ends with a table of their pros and cons.",
+      "Conversation Buffer": "Shows the simplest memory: paste the whole chat history into each prompt, using ConversationBufferMemory in LangChain, after which the model can recall the user's name. It is easy and loses nothing, but the prompt keeps growing and slows generation.",
+      "Windowed Conversation Buffer": "Limits the history to the last k exchanges using ConversationBufferWindowMemory so the prompt does not outgrow the token limit. The example shows the model recalling a name but forgetting an age said in the first turn, which is the cost of dropping older turns.",
+      "Conversation Summary": "Has a second LLM call summarise the conversation so far and puts that summary in the prompt, using ConversationSummaryMemory. This keeps the history small, but a detail like the exact first question may be lost and each turn needs an extra call, so the authors call it a trade-off between speed, memory and accuracy."
+    }
+  },
+  "HOLLM-8": {
+    "chapter": "Semantic Search and Retrieval-Augmented Generation",
+    "about": "Covers the three ways language models improve search: dense retrieval with embeddings, reranking, and RAG, where an LLM answers from retrieved text. It uses a small Interstellar example with Cohere's API and local models, and finishes with how to evaluate search and RAG.",
+    "ideas": [
+      "Dense retrieval embeds the query and the documents and returns the nearest vectors, so it finds matches by meaning when no keywords overlap.",
+      "Dense retrieval always returns something, even when the corpus has no answer, so consider a distance threshold. It also struggles with exact phrases, which is why the book advises hybrid search with keyword matching.",
+      "Long texts must be chunked because models have limited context. Chunk size, overlap and adding the title all change what the index can find.",
+      "A reranker is a second stage that reads the query and each candidate together and reorders a shortlist from a first-stage search.",
+      "RAG adds an LLM at the end of a search pipeline and prompts it with the question and retrieved text, which grounds the answer and reduces hallucination.",
+      "Evaluate search with a test set of queries and relevance judgments, and RAG on fluency, citation quality, faithfulness and answer relevance."
+    ],
+    "read_when": "Read it when you are building search or a RAG feature and need to choose between retrieval, reranking, chunking and evaluation approaches.",
+    "sections": {
+      "From Search to RAG": "Turns the earlier search code into RAG by adding an LLM at the end: the question and the top retrieved documents go to the model, which answers from that context, called grounded generation. One example uses Cohere's chat endpoint, which returns citations pointing at the source documents. A second example runs locally with Phi-3, a small embedding model, FAISS and a prompt template with a context slot, and notes that the local version loses span citations.",
+      "Advanced RAG Techniques": "Lists upgrades to a basic RAG pipeline. Query rewriting turns a rambling chat message into a clean search query. Multi-query RAG runs several searches for a comparison question. Multi-hop RAG chains searches where the second depends on the first. Query routing picks which data source to search, and agentic RAG hands more of these decisions to the LLM, which only the largest models handled well at the time.",
+      "RAG Evaluation": "Says RAG evaluation is still developing and describes human scoring on fluency, perceived utility, citation recall and citation precision. It then describes using a strong LLM as the judge to automate this, and names the Ragas library, which also scores faithfulness (is the answer consistent with the context) and answer relevance.",
+      "Dense Retrieval": "Explains search as nearest-neighbour lookup: embed the documents once, embed each query, and return the closest vectors. The Cohere and FAISS example finds a good answer to a query that shares no keywords with it, which a BM25 comparison using rank_bm25 fails to do. It also lists caveats: results come back even if nothing is relevant, exact phrase lookup is better served by keywords, and models trained on one domain do poorly in another. The rest of the section covers chunking, nearest-neighbour libraries versus vector databases, and fine-tuning embeddings on query and result pairs.",
+      "Reranking": "Shows a reranker as a final step in an existing search pipeline that takes the query and a shortlist and reorders it by relevance. A BM25 shortlist reranked with Cohere's Rerank endpoint promotes a better result than keyword scores alone, and the book reports a jump on the MIRACL benchmark from 36.5 to 62.8 nDCG@10. It explains that many rerankers are cross-encoders that read the query and a document together and output a score from 0 to 1.",
+      "Retrieval Evaluation Metrics": "Explains that evaluating search needs a text archive, a set of queries and judgments of which documents are relevant to each. It walks through precision at a position, then average precision for one query, then mean average precision across all queries, so a system is rewarded for putting relevant results high. It names nDCG as the metric to use when relevance has degrees rather than yes or no.",
+      "Chunking Long Texts": "Explains that models cannot embed very long texts, so you either keep one vector per document or, better, several vectors per document. One vector per document means embedding only the title or start, or averaging chunk vectors, and both lose information. Chunking by sentence is often too small, chunking by paragraph works for short paragraphs, and adding the title or overlapping neighbouring text keeps context. The best choice depends on your texts and queries."
+    }
+  },
+  "HOLLM-11": {
+    "chapter": "Fine-Tuning Representation Models for Classification",
+    "about": "Shows how to fine-tune BERT-style models, which output representations rather than text, for classification and related tasks. Topics include full fine-tuning with a classification head, the few-shot method SetFit, continued pretraining, and named-entity recognition.",
+    "ideas": [
+      "With enough labelled data, fine-tuning a representation model tends to beat using a pretrained one unchanged.",
+      "In the movie review example, fine-tuning BERT reaches an F1 of 0.85 against 0.80 for the pretrained task-specific model from the earlier chapter, in a few minutes of training.",
+      "Training the whole network, not just the classification head, is what the freezing-layers comparison is meant to show matters.",
+      "SetFit reaches competitive results from a few labelled examples per class by building similar and dissimilar sentence pairs, fine-tuning an embedding model on them, then training a classifier on the embeddings.",
+      "A pretrained model can be trained further on your own text with masked language modeling before the task step.",
+      "Named-entity recognition classifies individual tokens, for example person, organisation and location, rather than whole documents."
+    ],
+    "read_when": "Read it when a prompt-only classifier is not accurate enough and you have labelled data, or only a handful of labels, and want a trained classifier instead.",
+    "sections": {}
+  },
+  "HOLLM-12": {
+    "chapter": "Fine-Tuning Generation Models",
+    "about": "Walks through adapting a pretrained text generation model: the three training stages, supervised fine-tuning, parameter-efficient methods such as LoRA and QLoRA, and a full instruction-tuning run on TinyLlama. It then covers how to evaluate generative models and how preference tuning aligns them.",
+    "ideas": [
+      "High-quality LLMs come from three steps: pretraining on raw text, supervised fine-tuning to follow instructions, and preference tuning to match human preferences.",
+      "A base model tends to continue a question instead of answering it, and fine-tuning on instruction and answer pairs fixes that.",
+      "Full fine-tuning updates every weight and is costly, so parameter-efficient methods train only a small part of the model.",
+      "LoRA trains two small matrices in place of each large weight matrix, and QLoRA also stores the frozen weights in 4 bits to cut memory.",
+      "No single evaluation method is enough. Word-level metrics, public benchmarks, LLM-as-a-judge and human evaluation each show part of the picture, and the authors advise testing on your own use case.",
+      "Preference tuning trains a reward model on accepted and rejected answers (PPO), or skips it with direct preference optimization (DPO)."
+    ],
+    "read_when": "Read it when prompting and RAG are not enough and you are weighing whether to fine-tune a model yourself, or when you need to know how model quality is measured.",
+    "sections": {
+      "Evaluating Generative Models": "Argues that evaluating generative models is hard because one model is used for many tasks and its outputs vary, so no single metric works. It reviews word-level metrics such as perplexity, public benchmarks such as MMLU and HumanEval, leaderboards, LLM-as-a-judge and human evaluation such as Chatbot Arena, and notes the risk of overfitting to benchmarks. It advises evaluating on your intended use case and quotes Goodhart's Law, that a measure turned into a target stops being a good measure.",
+      "The Three LLM Training Steps": "Lays out the pipeline: pretraining by next-token prediction on huge unlabelled text gives a base model that is hard for end users to work with. Supervised fine-tuning on instruction and answer data makes it follow instructions, and preference tuning then aligns its output with human preferences or safety expectations.",
+      "Parameter-Efficient Fine-Tuning (PEFT)": "Explains that updating all parameters is expensive in compute, time and storage, so PEFT trains a small part instead. It describes adapters, small modules added inside each Transformer block, citing a result where tuning about 3.6 percent of BERT's parameters came close to full fine-tuning. Specialised adapters can be swapped on the same base model.",
+      "Low-Rank Adaptation (LoRA)": "Shows how LoRA replaces training a large weight matrix with training two much smaller matrices whose product approximates the change, for example 20 weights instead of 100 in a toy case. It argues this works because models have low intrinsic dimension, and gives a GPT-3 sized estimate of about 197 thousand parameters per block at rank 8. It then explains QLoRA, which adds blockwise 4-bit quantization of the frozen weights to cut memory further.",
+      "Instruction Tuning with QLoRA": "A code walkthrough that instruction-tunes TinyLlama with QLoRA on 3,000 UltraChat conversations formatted in a chat template. It loads the model in 4 bits with bitsandbytes, sets LoRA options with peft (rank, alpha, target modules), trains with trl's SFTTrainer, then merges the adapter into the base model. It reports the model loading in about 1 GB of VRAM instead of about 4 GB, and the tuned model now follows instructions."
+    }
+  }
+}

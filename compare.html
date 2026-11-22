@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compare and combine · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Compare and combine</p>
+    <h1>Compare and combine</h1>
+    <p class="lead">Embeddings, vector search, keyword search, hybrid search, RAG, graph databases, GraphRAG,
+      LangChain, LangGraph: side by side. What each one reads, whether it needs the exact words, when to use
+      one, two or all of them, and which combinations real systems are built from.</p>
+
+    <div class="tabs wide" role="tablist" aria-label="Sections of this page">
+      <button type="button" role="tab" aria-controls="kinds">1. What each one is</button>
+      <button type="button" role="tab" aria-controls="table">2. Side by side</button>
+      <button type="button" role="tab" aria-controls="works">3. How each works</button>
+      <button type="button" role="tab" aria-controls="when">4. When to use it</button>
+      <button type="button" role="tab" aria-controls="together">5. Alone or together</button>
+      <button type="button" role="tab" aria-controls="systems">6. Common systems</button>
+    </div>
+
+    <!-- ================= 1 ================= -->
+    <section id="kinds" role="tabpanel">
+      <h2>They are not rivals. They are five kinds of thing.</h2>
+      <p>Most confusion comes from comparing items that sit on different levels. "RAG or a vector database?" is
+        like asking "a web app or Postgres?": one uses the other. Read the stack from the bottom up: each layer
+        serves the one above it.</p>
+
+      <div class="layers wide">
+        <div class="layer reliability">
+          <h4>Libraries<small>code you import; optional</small></h4>
+          <div><div class="chips"><span class="chip">LangChain</span><span class="chip">LangGraph</span></div>
+            <p>Less glue to write. They hold no data and do no searching. Like an ORM, or a workflow framework.</p></div>
+        </div>
+        <div class="layer flow">
+          <h4>Patterns<small>what your app does</small></h4>
+          <div><div class="chips"><span class="chip">RAG</span><span class="chip">GraphRAG</span><span class="chip">Tool calling</span><span class="chip">Workflow</span><span class="chip">Agent</span></div>
+            <p>A way of arranging searches and model calls to produce an answer. Like "cache-aside" or "queue and worker".</p></div>
+        </div>
+        <div class="layer retrieval">
+          <h4>Ways to search<small>find the right pieces</small></h4>
+          <div><div class="chips"><span class="chip">Vector search</span><span class="chip">Keyword search (BM25)</span><span class="chip">Hybrid search</span><span class="chip">Graph query</span></div>
+            <p>Pick the parts of your data that matter for one question. Like a query against an index.</p></div>
+        </div>
+        <div class="layer graphdb">
+          <h4>Where data lives<small>one store per kind of search</small></h4>
+          <div><div class="chips"><span class="chip">Vector database · Qdrant</span><span class="chip">Keyword index · Elasticsearch</span><span class="chip">Graph database · Neo4j</span></div>
+            <p>The data, kept in the shape one kind of search needs. Like a database with a particular index type.</p></div>
+        </div>
+        <div class="layer model">
+          <h4>Building blocks<small>small models, no answers</small></h4>
+          <div><div class="chips"><span class="chip">Embedding model</span><span class="chip">Reranker</span></div>
+            <p>Turn text into numbers, or score how well a passage fits a question. Like a hash function or a scoring function.</p></div>
+        </div>
+      </div>
+
+      <div class="book-says">
+        <cite>AI Engineering · ch. 6, summary</cite>
+        <p>The book makes the same point one level up: the RAG pattern can be seen as a special case of an
+          agent, in which the retriever is a tool the model can use.</p>
+      </div>
+
+      <h3>The mix-ups, settled</h3>
+      <div class="cards wide">
+        <div class="card flow"><span class="badge none">Not a choice</span><h4>RAG or embeddings?</h4><p>RAG is the pattern; embeddings are one ingredient of its search step. RAG also works with keyword search alone, and no embeddings.</p></div>
+        <div class="card flow"><span class="badge none">Not a choice</span><h4>RAG or a vector database?</h4><p>A vector database is where RAG's vector search keeps its data. One uses the other.</p></div>
+        <div class="card retrieval"><span class="badge meaning">Usually both</span><h4>Vector search or keyword search?</h4><p>A real choice, and they fail on different questions. Running both is called hybrid search.</p></div>
+        <div class="card graphdb"><span class="badge exact">Different questions</span><h4>Vector database or graph database?</h4><p>Vector: "which text is about this?" Graph: "what is connected to this?" Many systems need only the first.</p></div>
+        <div class="card graphdb"><span class="badge exact">An addition</span><h4>RAG or GraphRAG?</h4><p>GraphRAG is RAG with a graph as an extra source. It is for relationship questions, not a newer replacement.</p></div>
+        <div class="card reliability"><span class="badge exact">Different jobs</span><h4>LangChain or LangGraph?</h4><p>LangChain talks to models and tools. LangGraph runs the steps of a flow and saves its state. Use either, both or neither.</p></div>
+        <div class="card model"><span class="badge exact">Different failures</span><h4>RAG or finetuning?</h4><p>RAG when the model lacks facts. Finetuning when it has the facts but the wrong format or behaviour. <a href="20-finetuning.html">Chapter 20</a></p></div>
+        <div class="card flow"><span class="badge exact">Different levels</span><h4>RAG or an agent?</h4><p>RAG is one fixed recipe. An agent is a loop in which the model picks its steps, and searching your documents is often one of its tools.</p></div>
+      </div>
+    </section>
+
+    <!-- ================= 2 ================= -->
+    <section id="table" role="tabpanel">
+      <h2>Side by side</h2>
+      <p>One card each. The line to look at first is <strong>Exact words?</strong>: it decides which questions
+        a search can answer.</p>
+
+      <div class="cards wide">
+        <div class="card model"><span class="kind">Building block</span><h4>Embedding</h4>
+          <dl class="facts"><dt>Reads</dt><dd>Any text: a chunk, a question</dd><dt>Exact words?</dt><dd><span class="badge meaning">No · meaning</span></dd><dt>Model</dt><dd>A small embedding model. No LLM</dd></dl>
+          <p class="plus">Turns "similar meaning" into numbers a computer can compare.</p>
+          <p class="minus">Exact codes and numbers barely change the vector.</p>
+          <a class="more" href="05-embeddings.html">Chapter 5 →</a></div>
+        <div class="card retrieval"><span class="kind">Way to search</span><h4>Vector search</h4>
+          <dl class="facts"><dt>Reads</dt><dd>Stored embeddings of your chunks</dd><dt>Exact words?</dt><dd><span class="badge meaning">No · meaning</span></dd><dt>Model</dt><dd>Only to embed the question</dd></dl>
+          <p class="plus">People's own words, synonyms, other languages. "Computer stolen" finds "lost device".</p>
+          <p class="minus">Look-alike codes (FIN-140 vs FIN-401). Always returns something, even when nothing fits.</p>
+          <a class="more" href="06-vector-databases.html">Chapter 6 →</a></div>
+        <div class="card retrieval"><span class="kind">Way to search</span><h4>Keyword search (BM25)</h4>
+          <dl class="facts"><dt>Reads</dt><dd>An index from each word to its chunks</dd><dt>Exact words?</dt><dd><span class="badge exact">Yes · shared words</span></dd><dt>Model</dt><dd>None</dd></dl>
+          <p class="plus">Codes, names, error messages, rare terms. Fast and easy to explain.</p>
+          <p class="minus">Paraphrases. "Stolen" never matches "lost".</p>
+          <a class="more" href="07-keyword-search.html">Chapter 7 →</a></div>
+        <div class="card retrieval"><span class="kind">Way to search</span><h4>Hybrid search</h4>
+          <dl class="facts"><dt>Reads</dt><dd>Both indexes</dd><dt>Exact words?</dt><dd><span class="badge meaning">Either works</span></dd><dt>Model</dt><dd>Only to embed the question</dd></dl>
+          <p class="plus">Mixed traffic, when you cannot know which kind of question is coming.</p>
+          <p class="minus">When the two lists disagree, fusion alone cannot tell who is right.</p>
+          <a class="more" href="08-hybrid-search.html">Chapter 8 →</a></div>
+        <div class="card model"><span class="kind">Building block</span><h4>Reranker</h4>
+          <dl class="facts"><dt>Reads</dt><dd>The question and each candidate, together</dd><dt>Exact words?</dt><dd><span class="badge meaning">No · and it sees exact tokens too</span></dd><dt>Model</dt><dd>A small cross-encoder, once per candidate</dd></dl>
+          <p class="plus">Puts the best candidate first.</p>
+          <p class="minus">Too slow to search everything. It only sorts what a search found.</p>
+          <a class="more" href="08-hybrid-search.html">Chapter 8 →</a></div>
+        <div class="card flow"><span class="kind">Pattern</span><h4>RAG</h4>
+          <dl class="facts"><dt>Reads</dt><dd>Your documents, through a search, pasted into the prompt</dd><dt>Exact words?</dt><dd><span class="badge none">Depends on its search</span></dd><dt>Model</dt><dd>An LLM writes the answer</dd></dl>
+          <p class="plus">Answers from your own documents, with sources.</p>
+          <p class="minus">Only as good as its search. Cannot count, total or follow relationships.</p>
+          <a class="more" href="04-rag.html">Chapter 4 →</a></div>
+        <div class="card graphdb"><span class="kind">Where data lives</span><h4>Graph database</h4>
+          <dl class="facts"><dt>Reads</dt><dd>Things and the links between them. Not documents</dd><dt>Exact words?</dt><dd><span class="badge exact">Yes · to find the start</span></dd><dt>Model</dt><dd>None</dd></dl>
+          <p class="plus">"Who reports to whom", "what depends on this": chains of any length, exactly.</p>
+          <p class="minus">Free text. Questions whose answer is written in prose.</p>
+          <a class="more" href="10-graph-databases.html">Chapter 10 →</a></div>
+        <div class="card flow"><span class="kind">Pattern</span><h4>GraphRAG</h4>
+          <dl class="facts"><dt>Reads</dt><dd>Graph facts, usually next to retrieved text</dd><dt>Exact words?</dt><dd><span class="badge exact">The entity must be recognised</span></dd><dt>Model</dt><dd>An LLM writes the answer</dd></dl>
+          <p class="plus">Answers that join a rule from text with a fact about connections.</p>
+          <p class="minus">Pointless when the text has the answer. Costly if the graph must be extracted from documents.</p>
+          <a class="more" href="11-graphrag.html">Chapter 11 →</a></div>
+        <div class="card flow"><span class="kind">Pattern</span><h4>Tool calling</h4>
+          <dl class="facts"><dt>Reads</dt><dd>Live systems, through functions you write</dd><dt>Exact words?</dt><dd><span class="badge none">Your code checks the arguments</span></dd><dt>Model</dt><dd>An LLM decides to call</dd></dl>
+          <p class="plus">Live or per-user values, and doing things.</p>
+          <p class="minus">The model may call the wrong tool, or none.</p>
+          <a class="more" href="12-tool-calling.html">Chapter 12 →</a></div>
+        <div class="card reliability"><span class="kind">Library</span><h4>LangChain</h4>
+          <dl class="facts"><dt>Reads</dt><dd>Nothing itself. It sends your prompt to a model</dd><dt>Exact words?</dt><dd><span class="badge none">Not applicable</span></dd><dt>Model</dt><dd>Wraps whichever you choose</dd></dl>
+          <p class="plus">Swapping providers, structured output, tools.</p>
+          <p class="minus">Adds no intelligence, and can hide the prompt being sent.</p>
+          <a class="more" href="14-langchain.html">Chapter 14 →</a></div>
+        <div class="card reliability"><span class="kind">Library</span><h4>LangGraph</h4>
+          <dl class="facts"><dt>Reads</dt><dd>The flow's state: what was found and decided</dd><dt>Exact words?</dt><dd><span class="badge none">Not applicable</span></dd><dt>Model</dt><dd>Not itself. Your steps do</dd></dl>
+          <p class="plus">Branches, loops, pauses, saved conversations.</p>
+          <p class="minus">Overkill for two calls in a straight line.</p>
+          <a class="more" href="15-langgraph.html">Chapter 15 →</a></div>
+      </div>
+
+      <div class="book-says">
+        <cite>AI Engineering · ch. 6, "Comparing retrieval algorithms"</cite>
+        <p>The book's own comparison: term-based (keyword) retrieval is much faster and cheaper and works well
+          out of the box. Embedding-based retrieval can be improved over time to beat it, but it costs more and
+          can obscure keywords such as specific error codes or product names.</p>
+      </div>
+
+      <h3>What each one is built on</h3>
+      <table class="matrix">
+        <tr><th></th><th>Your documents</th><th>A database or index</th><th>The prompt</th><th>An LLM</th></tr>
+        <tr><td><strong>Embedding</strong></td><td class="on">●</td><td></td><td></td><td></td></tr>
+        <tr><td><strong>Vector search</strong></td><td class="on">●</td><td class="on">●</td><td></td><td></td></tr>
+        <tr><td><strong>Keyword search</strong></td><td class="on">●</td><td class="on">●</td><td></td><td></td></tr>
+        <tr><td><strong>Hybrid search</strong></td><td class="on">●</td><td class="on">●</td><td></td><td></td></tr>
+        <tr><td><strong>Reranker</strong></td><td class="on">●</td><td></td><td></td><td></td></tr>
+        <tr><td><strong>RAG</strong></td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td class="on">●</td></tr>
+        <tr><td><strong>Graph database</strong></td><td></td><td class="on">●</td><td></td><td></td></tr>
+        <tr><td><strong>GraphRAG</strong></td><td class="some">often</td><td class="on">●</td><td class="on">●</td><td class="on">●</td></tr>
+        <tr><td><strong>Tool calling</strong></td><td></td><td class="on">●</td><td class="on">●</td><td class="on">●</td></tr>
+        <tr><td><strong>LangChain</strong></td><td></td><td></td><td class="on">●</td><td class="some">wraps it</td></tr>
+        <tr><td><strong>LangGraph</strong></td><td></td><td class="some">for its state</td><td></td><td></td></tr>
+      </table>
+      <p class="caption">Only three rows reach an LLM, and all three reach it the same way: through the prompt.
+        Documents, graph facts and tool results all end up as text pasted into one prompt.</p>
+    </section>
+
+    <!-- ================= 3 ================= -->
+    <section id="works" role="tabpanel">
+      <h2>How each one works</h2>
+      <p>What goes in, what happens, what comes out.</p>
+
+      <div class="map wide">
+        <div class="band"><h3>Embedding <small>a conversion, nothing more</small></h3>
+          <ol class="steps"><li class="node plain"><b>A text</b><span>"Report a lost device within 24 hours."</span></li><li class="node model"><b>Embedding model</b></li><li class="node model"><b>A vector</b><span>384 numbers</span></li></ol>
+          <p>Done once for every chunk and once for every question. Nothing is searched or answered here.</p></div>
+
+        <div class="band"><h3>Vector search <small>nearest by meaning</small></h3>
+          <ol class="steps"><li class="node plain"><b>Question</b></li><li class="node model"><b>Embed it</b></li><li class="node retrieval"><b>Vector database</b><span>find the nearest stored vectors</span></li><li class="node plain"><b>Top chunks</b></li></ol></div>
+
+        <div class="band"><h3>Keyword search (BM25) <small>shared words, rare ones first</small></h3>
+          <ol class="steps"><li class="node plain"><b>Question</b></li><li class="node retrieval"><b>Split into words</b><span>drop the common ones</span></li><li class="node retrieval"><b>Inverted index</b><span>which chunks contain them?</span></li><li class="node plain"><b>Top chunks</b></li></ol></div>
+
+        <div class="band"><h3>Hybrid search with a reranker <small>retrieve wide, rerank narrow</small></h3>
+          <ol class="steps"><li class="node plain"><b>Question</b></li><li class="fork"><div class="node retrieval"><b>Vector search</b></div><div class="node retrieval"><b>Keyword search</b></div></li><li class="node retrieval"><b>Fuse</b><span>merge the lists by rank</span></li><li class="node model"><b>Rerank</b><span>score each candidate against the question</span></li><li class="node plain"><b>Top chunks</b></li></ol></div>
+
+        <div class="band"><h3>RAG <small>the first one that produces an answer</small></h3>
+          <ol class="steps"><li class="node plain"><b>Question</b></li><li class="node retrieval"><b>Retrieve</b><span>any search above</span></li><li class="node model"><b>Build the prompt</b><span>rules + chunks + question</span></li><li class="node model"><b>LLM</b></li><li class="node plain"><b>Answer</b><span>with its source</span></li></ol></div>
+
+        <div class="band"><h3>Graph database <small>exact, every time</small></h3>
+          <ol class="steps"><li class="node plain"><b>A starting point</b><span>"Maria Lind"</span></li><li class="node graphdb"><b>A query (Cypher)</b><span>follow REPORTS_TO up to a director</span></li><li class="node graphdb"><b>Graph database</b></li><li class="node plain"><b>An exact result</b><span>"Sara Holm"</span></li></ol>
+          <p>No model, no similarity. The same query always gives the same answer.</p></div>
+
+        <div class="band"><h3>GraphRAG <small>text for the rule, graph for the people</small></h3>
+          <ol class="steps"><li class="node plain"><b>Question</b></li><li class="fork"><div class="node retrieval"><b>Retrieve text</b></div><div class="node graphdb"><b>Query the graph</b></div></li><li class="node model"><b>Build the prompt</b><span>chunks + graph facts</span></li><li class="node model"><b>LLM</b></li><li class="node plain"><b>Answer</b></li></ol></div>
+
+        <div class="band"><h3>LangChain and LangGraph <small>not steps: how the steps are written</small></h3>
+          <ol class="steps loose"><li class="node reliability"><b>LangChain</b><span>around one model call: builds the messages, sends them, parses the reply</span></li><li class="node reliability"><b>LangGraph</b><span>around the whole flow: runs step after step, branches, loops, saves state</span></li></ol></div>
+      </div>
+
+      <div class="book-says">
+        <cite>AI Engineering · ch. 10, "AI Pipeline Orchestration"</cite>
+        <p>On libraries of this kind, the book's advice is to start building without an orchestration tool.
+          Any external tool adds complexity, and an orchestrator can hide the details of how your system works.
+          Add one when the pipeline has grown enough to need it.</p>
+      </div>
+    </section>
+
+    <!-- ================= 4 ================= -->
+    <section id="when" role="tabpanel">
+      <h2>When to use each, and when not</h2>
+      <div class="cards wide">
+        <div class="card retrieval"><h4>Vector search</h4><p class="plus">People describe what they want in their own words.</p><p class="minus">They type identifiers, or the data is rows and numbers.</p>
+          <p class="eg"><b>Help centre.</b> "My card got declined abroad" should find the article titled "International payment failures".</p></div>
+        <div class="card retrieval"><h4>Keyword search</h4><p class="plus">The query contains the very term that is in the document.</p><p class="minus">People paraphrase, or ask in another language.</p>
+          <p class="eg"><b>Logs or a parts catalogue.</b> "E-4012", "M8x40 bolt". A meaning-based search returns every similar-looking code.</p></div>
+        <div class="card retrieval"><h4>Hybrid search</h4><p class="plus">Both kinds of query arrive, which is nearly always true once real users show up.</p><p class="minus">One search already passes your tests, or two indexes are too much to run.</p>
+          <p class="eg"><b>A shop.</b> "Waterproof jacket for hiking" and "GTX-200 size M" come through the same search box.</p></div>
+        <div class="card model"><h4>Reranker</h4><p class="plus">The right result is found but not on top, or you want to send fewer chunks to the model.</p><p class="minus">Every millisecond counts, or the first result is already right.</p>
+          <p class="eg"><b>Legal research.</b> Fifty passages mention "termination". The reranker puts the one about termination <em>for cause</em> first.</p></div>
+        <div class="card flow"><h4>RAG</h4><p class="plus">Answers must come from your documents, the documents change, and users need the source.</p><p class="minus">Everything fits in the prompt, or the answer is a number in a database.</p>
+          <p class="eg"><b>Internal assistant.</b> "What is our refund policy?", answered with a link to the policy page.</p></div>
+        <div class="card graphdb"><h4>Graph database</h4><p class="plus">The question is a chain of connections of unknown length.</p><p class="minus">One or two joins answer it, or the data is prose.</p>
+          <p class="eg"><b>Dependency map.</b> "Which services break if this database goes down?" <b>Org chart.</b> "Who can approve this?"</p></div>
+        <div class="card flow"><h4>GraphRAG</h4><p class="plus">The text gives the rule; the graph gives who or what it applies to.</p><p class="minus">The text alone answers it. Try better search first: far cheaper.</p>
+          <p class="eg"><b>Expenses.</b> "Who must approve my 800 euro claim?" The policy says "a director"; the org chart says which one.</p></div>
+        <div class="card flow"><h4>Tool calling</h4><p class="plus">The value is live or personal, or something must be done.</p><p class="minus">You always need that lookup: call it in code and put the result in the prompt.</p>
+          <p class="eg"><b>Orders.</b> "Where is my parcel?" The answer is in the order system, not in any document.</p></div>
+        <div class="card reliability"><h4>LangChain</h4><p class="plus">You want to switch model providers by configuration, or use structured output and tools without each provider's format.</p><p class="minus">One provider and simple calls: its own SDK is less to learn.</p>
+          <p class="eg"><b>Model selection.</b> A team tries three models before choosing, without rewriting the app each time.</p></div>
+        <div class="card reliability"><h4>LangGraph</h4><p class="plus">The flow branches, loops, waits for a person, or continues a conversation later.</p><p class="minus">Two calls in a straight line. Write a function.</p>
+          <p class="eg"><b>Insurance claims.</b> Gather facts, draft a decision, wait for an adjuster to approve, then send.</p></div>
+      </div>
+
+      <div class="book-says hollm">
+        <cite>Hands-On Large Language Models · ch. 8, "Dense Retrieval"</cite>
+        <p>The book lists the caveats of vector search from its own experiments: it returns results even when
+          nothing in the archive is relevant, exact phrases are better served by keyword matching, and a model
+          trained on one domain does poorly in another. It points to hybrid search as the answer.</p>
+      </div>
+
+      <h3>By the kind of question</h3>
+      <p>The same thing from the other side: the docs assistant's own questions, and what answered each.</p>
+      <div class="qlist wide">
+        <div><q>What do I do if my computer is stolen?</q><span><span class="tag retrieval">Vector search</span></span><small>The policy says "lost device". No word in common.</small></div>
+        <div><q>When do I need FIN-140?</q><span><span class="tag retrieval">Keyword search</span></span><small>Vector search confused it with FIN-401.</small></div>
+        <div><q>Both of those, from different users</q><span><span class="tag retrieval">Hybrid + reranker</span></span><small>You cannot know which is coming.</small></div>
+        <div><q>Who has to approve my expense claim?</q><span><span class="tag graphdb">Graph query + text</span></span><small>The rule is in the handbook; the person is in the org chart.</small></div>
+        <div><q>Do I have enough holiday left for 10 days?</q><span><span class="tag flow">A tool + code</span></span><small>The balance is in the HR system; the comparison belongs in code.</small></div>
+        <div><q>And for 5 days instead?</q><span><span class="tag flow">Memory</span></span><small>Means nothing without the question before it.</small></div>
+        <div><q>How many policies changed last year?</q><span><span class="tag plain">A database query</span></span><small>Counting is not what any search does.</small></div>
+        <div><q>Summarise this page for me.</q><span><span class="tag model">Just the model</span></span><small>The text is already in hand. No retrieval.</small></div>
+        <div><q>Write me a poem.</q><span><span class="tag reliability">A router that says no</span></span><small>Not this assistant's job.</small></div>
+      </div>
+    </section>
+
+    <!-- ================= 5 ================= -->
+    <section id="together" role="tabpanel">
+      <h2>One, two, or all of them?</h2>
+      <p>Add a piece when a real failure asks for it. This is what each addition bought the docs assistant, on
+        its twelve test questions ("the right chunk is ranked first"):</p>
+      <div class="scoreboard wide">
+        <div><b>7<small>/12</small></b><span>Keyword search alone</span></div>
+        <div><b>11<small>/12</small></b><span>Vector search alone</span></div>
+        <div><b>8<small>/12</small></b><span>Both, fused, no reranker</span></div>
+        <div class="now"><b>12<small>/12</small></b><span>Both, fused, reranked</span></div>
+      </div>
+      <div class="callout reliability">
+        <p><strong>Combining is not automatically better.</strong> One search alone already did well, and two
+          searches <em>without</em> a reranker ranked first place worse, because their disagreements became
+          ties. (<a href="08-hybrid-search.html">Chapter 8</a>)</p>
+      </div>
+
+      <h3>The ladder</h3>
+      <p>Each rung adds machinery. Stay on the lowest one that passes your tests.</p>
+      <ol class="stepper wide">
+        <li><h4>Just the model <small>no search at all</small></h4><p><b>Enough when</b>The task needs no outside facts, or the text fits in the prompt: summarising, rewriting, classifying, a short FAQ.</p><p><b>Climb when</b>It answers about facts it cannot know.</p></li>
+        <li><h4>One search <small>vector or keyword, inside RAG</small></h4><p><b>Enough when</b>A small corpus and one kind of question. Vector for natural questions, keyword for catalogues and codes.</p><p><b>Climb when</b>Tests show a class of misses: exact terms with vector search, paraphrases with keyword search.</p></li>
+        <li><h4>Two searches <small>hybrid, with a reranker</small></h4><p><b>Enough when</b>Mixed questions over documents. Most document assistants stop here.</p><p><b>Climb when</b>Answers are incomplete although the right text was found.</p></li>
+        <li><h4>Search + a graph <small>GraphRAG</small></h4><p><b>Enough when</b>Answers depend on relationships: people, ownership, dependencies.</p><p><b>Climb when</b>Some answers are live values or actions.</p></li>
+        <li><h4>Search + tools <small>tool calling</small></h4><p><b>Enough when</b>The assistant must look up live data or do things.</p><p><b>Climb when</b>Different requests need different paths, or a conversation must continue.</p></li>
+        <li><h4>All of it, in a flow <small>LangGraph or plain code</small></h4><p><b>Enough when</b>A real assistant with several kinds of question, memory and checks.</p><p><b>Then</b>Stop adding. Keep measuring.</p></li>
+      </ol>
+
+      <div class="book-says">
+        <cite>AI Engineering · ch. 7, "Finetuning and RAG" · ch. 6, "RAG"</cite>
+        <p>Two pieces of advice from the book fit this ladder. When you add RAG, begin with basic retrieval such
+          as term-based search: even simple retrieval that brings in relevant knowledge improves answers. And
+          longer context windows will not make RAG obsolete: data keeps growing, models use long context less
+          well, and every extra token costs time and money.</p>
+      </div>
+
+      <h3>Which pairs make sense</h3>
+      <p>Each card: what the pair does together, and one small case.</p>
+      <div class="cards wide">
+        <div class="card retrieval"><span class="badge meaning">Always together</span><h4>Embeddings + vector database</h4>
+          <p>The embedding model turns each chunk into a vector; the database stores the vectors and finds the nearest ones fast. Neither is useful alone.</p>
+          <p class="eg"><b>Example.</b> 50,000 help articles embedded once and stored in Qdrant; each question is embedded and matched in milliseconds. Under a few thousand chunks, a plain loop does the database's job.</p></div>
+        <div class="card retrieval"><span class="badge meaning">Very common</span><h4>Vector + keyword search</h4>
+          <p>Their blind spots are opposite. Vector search misses exact terms; keyword search misses paraphrases. Together, the right chunk is almost always among the candidates.</p>
+          <p class="eg"><b>Example.</b> "My laptop was stolen" is found by meaning, "form FIN-140" by its exact code. In this book, both together found the right chunk for 12 of 12 questions.</p></div>
+        <div class="card retrieval"><span class="badge meaning">Add the reranker</span><h4>Hybrid search + reranker</h4>
+          <p>Fusion merges the two lists but cannot judge between them. A reranker reads the question next to each candidate and puts the best one first.</p>
+          <p class="eg"><b>Example.</b> The two searches disagreed on FIN-140 against FIN-401 and fusion tied them. The reranker picked the right one: 8 of 12 became 12 of 12.</p></div>
+        <div class="card graphdb"><span class="badge exact">When relationships matter</span><h4>RAG + a graph</h4>
+          <p>The documents hold the rule; the graph holds who or what the rule applies to. Each alone gives half an answer.</p>
+          <p class="eg"><b>Example.</b> The policy says "a director must approve claims above 500 euros". The org chart says that for Maria, the director is Sara Holm.</p></div>
+        <div class="card flow"><span class="badge meaning">Common in assistants</span><h4>RAG + tools</h4>
+          <p>Retrieval answers what is written down and the same for everyone. Tools fetch what is live or personal, straight from the system that owns it.</p>
+          <p class="eg"><b>Example.</b> "How many holiday days do employees get?" is in the handbook. "How many do <em>I</em> have left?" is a lookup in the HR system.</p></div>
+        <div class="card reliability"><span class="badge none">Optional</span><h4>LangChain + LangGraph</h4>
+          <p>LangChain wraps each model call: messages, tools, structured output. LangGraph connects the calls into a flow with branches and saved state. Each works without the other.</p>
+          <p class="eg"><b>Example.</b> A support flow: LangGraph routes the question and remembers the conversation; inside each step, LangChain talks to the model.</p></div>
+        <div class="card graphdb"><span class="badge exact">Only with a reason</span><h4>Vector database + graph database</h4>
+          <p>Two stores to run and to keep in step with their sources. Worth it when you truly have both kinds of question: about what text says, and about what is connected.</p>
+          <p class="eg"><b>Example.</b> An HR assistant: the handbook in Qdrant, the org chart in Neo4j. A plain document assistant needs only the first.</p></div>
+        <div class="card reliability"><span class="badge stop">Rarely</span><h4>A graph instead of search</h4>
+          <p>A graph stores things and links, not prose. Drop text search and every question whose answer is a sentence in a document goes unanswered.</p>
+          <p class="eg"><b>Example.</b> The graph knows Maria reports to Jonas. It has no idea how long parental leave is.</p></div>
+        <div class="card reliability"><span class="badge stop">Small corpora only</span><h4>A bigger context window instead of retrieval</h4>
+          <p>Sending everything works while it fits and the cost per call is acceptable. As the corpus grows, each call gets slower and dearer, and the one relevant line is buried.</p>
+          <p class="eg"><b>Example.</b> A 10-page FAQ: send it whole. A 200-page handbook: about 133,000 tokens per question, against 1,200 with retrieval.</p></div>
+      </div>
+
+      <div class="use-skip wide">
+        <div><h3>Use all of them when</h3><ul><li>One assistant faces several kinds of question: policy, personal data, relationships, follow-ups.</li><li>Each piece was added to fix a failure you measured.</li><li>Someone will operate it: two or three stores to keep in step with their sources.</li></ul></div>
+        <div><h3>Stay with one when</h3><ul><li>The corpus is small and the questions are of one kind.</li><li>It passes your tests. A second search adds an index, latency and tuning.</li><li>You have no tests yet. Then you cannot tell whether an addition helped.</li></ul></div>
+      </div>
+    </section>
+
+    <!-- ================= 6 ================= -->
+    <section id="systems" role="tabpanel">
+      <h2>Common systems, and what they are made of</h2>
+      <p>Eight kinds of product you already know, each taken apart: what the user sees, what the model can
+        call, where the data lives, and whether that is a vector database such as Qdrant, a graph database such
+        as Neo4j, both, or neither.</p>
+      <div class="callout">
+        <p><strong>How to read the product names.</strong> "You know it as" lists well-known products of each
+          kind so you can place it. The design shown is the typical one for that kind of product. It is not a
+          description of how any named product is built inside.</p>
+      </div>
+
+      <div class="map wide">
+        <div class="band"><h3>1. Chat with your documents <small>upload a file or point at a wiki, then ask</small></h3>
+          <p class="known">You know it as: NotebookLM, "chat with PDF" tools, file upload in chat assistants.</p>
+          <ol class="steps"><li class="node retrieval"><b>Chunk + embed</b><span>on upload</span></li><li class="node retrieval"><b>Vector search</b></li><li class="node model"><b>Prompt + LLM</b></li><li class="node plain"><b>Answer</b><span>with page references</span></li></ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>A chat box next to the document. Answers carry page references you can click.</dd></div>
+            <div><dt>Tools</dt><dd>None. A fixed pipeline: the model never chooses a step.</dd></div>
+            <div><dt>Database</dt><dd>A vector database holding the chunks. For one short document: none, the whole text goes in the prompt.</dd></div>
+            <div><dt>Qdrant or Neo4j?</dt><dd><span class="badge meaning">Qdrant</span> Questions are about what the text says, not about connections.</dd></div>
+          </dl></div>
+
+        <div class="band"><h3>2. Help-centre or support bot <small>answers from help articles and the customer's account</small></h3>
+          <p class="known">You know it as: the chat bubble on a company's site; Intercom Fin, Zendesk AI agents.</p>
+          <ol class="steps"><li class="node flow"><b>Route</b><span>how-to · my account · hand off</span></li><li class="fork"><div class="node retrieval"><b>Hybrid search + rerank</b><span>help articles</span></div><div class="node flow"><b>Tool</b><span>look up the order</span></div></li><li class="node model"><b>Prompt + LLM</b></li><li class="node reliability"><b>Check</b><span>reply, or hand to a person</span></li></ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>A chat widget on the site or in the app, with a way to reach a person. Support staff see the hand-offs in their inbox.</dd></div>
+            <div><dt>Tools</dt><dd>Look up an order or account, open a ticket, hand the conversation to a person.</dd></div>
+            <div><dt>Database</dt><dd>Help articles in a vector database with keyword search beside it. Conversations in the app's own database. Orders stay in the order system, reached by a tool.</dd></div>
+            <div><dt>Qdrant or Neo4j?</dt><dd><span class="badge meaning">Qdrant</span> Hybrid search, because customers type both "can't log in" and exact error codes.</dd></div>
+          </dl></div>
+
+        <div class="band"><h3>3. Enterprise search <small>one box over the wiki, tickets, chats and drives</small></h3>
+          <p class="known">You know it as: Glean, Microsoft 365 Copilot, the search inside workplace chat tools.</p>
+          <ol class="steps"><li class="node retrieval"><b>Connectors</b><span>index each source, with who may read it</span></li><li class="node retrieval"><b>Hybrid search</b><span>filtered by the user's permissions</span></li><li class="node model"><b>Rerank</b></li><li class="node model"><b>LLM</b><span>a summary above the results</span></li></ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>A search box and a result list, with a written summary on top. Often also a chat.</dd></div>
+            <div><dt>Tools</dt><dd>Read-only connectors that pull documents and their permissions from each source system.</dd></div>
+            <div><dt>Database</dt><dd>One large hybrid index, every chunk tagged with who may read it. Often a graph of people, teams and documents to rank what is close to the person asking.</dd></div>
+            <div><dt>Qdrant or Neo4j?</dt><dd><span class="badge meaning">Qdrant</span> <span class="badge graph">+ Neo4j, sometimes</span> The text index does the finding; the graph only improves the ranking.</dd></div>
+          </dl></div>
+
+        <div class="band"><h3>4. Product search in a shop <small>"waterproof hiking jacket under 150" and "GTX-200 size M"</small></h3>
+          <p class="known">You know it as: the search box of any large online shop.</p>
+          <ol class="steps"><li class="node model"><b>Parse the query</b><span>structured output: filters + free text</span></li><li class="node retrieval"><b>Hybrid search</b><span>price, size, stock as filters</span></li><li class="node model"><b>Rerank</b></li><li class="node plain"><b>A list of products</b></li></ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>A search box, filters down the side, a grid of products. No chat, no written answer.</dd></div>
+            <div><dt>Tools</dt><dd>None for the model. It only turns the typed query into filters and search text.</dd></div>
+            <div><dt>Database</dt><dd>The catalogue in a search index with vectors, keywords and filter fields. The shop's own database stays the source of truth.</dd></div>
+            <div><dt>Qdrant or Neo4j?</dt><dd><span class="badge meaning">Qdrant</span> or a search engine such as Elasticsearch. Price and size are filters; model numbers are exact.</dd></div>
+          </dl></div>
+
+        <div class="band"><h3>5. Coding assistant <small>answers questions about a codebase and changes it</small></h3>
+          <p class="known">You know it as: GitHub Copilot, Cursor, Claude Code.</p>
+          <ol class="steps"><li class="node model"><b>LLM picks the next step</b></li><li class="fork"><div class="node retrieval"><b>Exact search</b><span>symbol and file names</span></div><div class="node retrieval"><b>Meaning search</b><span>"where are retries handled?"</span></div><div class="node flow"><b>Tools</b><span>read, edit, run tests</span></div></li><li class="node model"><b>Back to the LLM</b><span>until the task is done</span></li></ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>Inside the editor or the terminal. It proposes changes as diffs that you accept or reject.</dd></div>
+            <div><dt>Tools</dt><dd>Read a file, search the code, edit a file, run a command or the tests. This is the system that leans on tools most.</dd></div>
+            <div><dt>Database</dt><dd>Often none: the files on disk are the data, searched directly. Some index the repository as vectors as well.</dd></div>
+            <div><dt>Qdrant or Neo4j?</dt><dd><span class="badge none">Often neither</span> Code is full of identifiers that must match character for character, so exact search does most of the work.</dd></div>
+          </dl></div>
+
+        <div class="band"><h3>6. Questions over business data <small>"revenue per region last quarter?"</small></h3>
+          <p class="known">You know it as: "ask your data" features in BI tools and data warehouses.</p>
+          <ol class="steps"><li class="node retrieval"><b>Search the schema</b><span>table and column descriptions</span></li><li class="node model"><b>LLM writes SQL</b></li><li class="node reliability"><b>Validate</b><span>read-only, allowed tables</span></li><li class="node flow"><b>Run it</b></li><li class="node plain"><b>Table + the query</b></li></ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>A question box in a dashboard or chat. It shows a table or chart, and the SQL it ran.</dd></div>
+            <div><dt>Tools</dt><dd>One: run a query, as a read-only user.</dd></div>
+            <div><dt>Database</dt><dd>The SQL database or warehouse you already have. At most a small vector index over the table and column descriptions.</dd></div>
+            <div><dt>Qdrant or Neo4j?</dt><dd><span class="badge none">Neither</span> The facts are rows and the answer is computed, so the model writes a query instead of reading passages.</dd></div>
+          </dl></div>
+
+        <div class="band"><h3>7. Fraud checks and recommendations <small>"is this account linked to known fraud?"</small></h3>
+          <p class="known">You know it as: "people you may know", "customers also bought", a bank's fraud alerts.</p>
+          <ol class="steps"><li class="node plain"><b>An account or a product</b></li><li class="node graphdb"><b>Graph query</b><span>shared devices, addresses, purchases</span></li><li class="node plain"><b>Connected items</b></li><li class="node model"><b>LLM, optional</b><span>explains the result</span></li></ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>Usually no chat at all: a risk score on an analyst's screen, or a row of suggestions on a page.</dd></div>
+            <div><dt>Tools</dt><dd>None. A query runs on a schedule or on each event.</dd></div>
+            <div><dt>Database</dt><dd>A graph of accounts, devices, addresses and purchases. Sometimes vectors too, for "similar" items.</dd></div>
+            <div><dt>Qdrant or Neo4j?</dt><dd><span class="badge graph">Neo4j</span> The whole question is "what is connected to this?". Often there is no language model in it.</dd></div>
+          </dl></div>
+
+        <div class="band"><h3>8. A knowledge assistant that knows who is who <small>policy questions that depend on the person asking</small></h3>
+          <p class="known">You know it as: an internal HR or IT assistant; this book's docs assistant.</p>
+          <ol class="steps"><li class="node flow"><b>Route</b></li><li class="fork"><div class="node retrieval"><b>Hybrid search</b><span>the handbook</span></div><div class="node graphdb"><b>Graph query</b><span>the org chart</span></div><div class="node flow"><b>Tool</b><span>the HR system</span></div></li><li class="node model"><b>Prompt + LLM</b></li><li class="node reliability"><b>Check</b></li><li class="node plain"><b>Answer</b></li></ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>A chat in the intranet or the workplace chat tool. The user is known from the login.</dd></div>
+            <div><dt>Tools</dt><dd>Search the handbook, look up the user's own record, ask the graph who their manager or director is.</dd></div>
+            <div><dt>Database</dt><dd>The handbook in a vector database, the org chart in a graph database, personal records left in the HR system.</dd></div>
+            <div><dt>Qdrant or Neo4j?</dt><dd><span class="badge meaning">Qdrant</span> <span class="badge graph">+ Neo4j</span> The text gives the rule ("a director must approve"); the graph says which director.</dd></div>
+          </dl></div>
+      </div>
+
+      <h3>Which database, at a glance</h3>
+      <table class="matrix stores">
+        <tr><th></th><th>Vector database (Qdrant)</th><th>Graph database (Neo4j)</th><th>What else holds the data</th></tr>
+        <tr><td>1. Chat with your documents</td><td class="on">●</td><td></td><td class="some">nothing</td></tr>
+        <tr><td>2. Support bot</td><td class="on">●</td><td></td><td class="some">order system, app database</td></tr>
+        <tr><td>3. Enterprise search</td><td class="on">●</td><td class="some">sometimes</td><td class="some">the source systems</td></tr>
+        <tr><td>4. Product search</td><td class="on">●</td><td></td><td class="some">shop database</td></tr>
+        <tr><td>5. Coding assistant</td><td class="some">sometimes</td><td></td><td class="some">the files themselves</td></tr>
+        <tr><td>6. Business data</td><td class="some">small, for the schema</td><td></td><td class="some">SQL database</td></tr>
+        <tr><td>7. Fraud, recommendations</td><td class="some">sometimes</td><td class="on">●</td><td class="some">event stream</td></tr>
+        <tr><td>8. Knowledge assistant</td><td class="on">●</td><td class="on">●</td><td class="some">HR system</td></tr>
+      </table>
+      <p class="caption">A vector index is central in five of the eight and plays a small or occasional part in the
+        other three. A graph database is essential in two and optional in one.</p>
+
+      <h3>Why do graph databases show up so much less?</h3>
+      <div class="cards two wide">
+        <div class="card retrieval"><span class="kind">Reason 1</span><h4>Most company knowledge is prose</h4><p>Wiki pages, policies, tickets, emails. Text search reads prose directly. A graph cannot: it needs things and links that somebody has already separated out.</p></div>
+        <div class="card retrieval"><span class="kind">Reason 2</span><h4>A vector index is nearly free to add</h4><p>Split, embed, store: an afternoon, with no modelling. A graph needs a schema first (which things? which links?), and then data that fits it.</p></div>
+        <div class="card graphdb"><span class="kind">Reason 3</span><h4>Someone has to build the graph</h4><p>Either the structured data already exists (an HR system, a CRM), or a model must extract it from documents, chunk by chunk. That is slow, costs a model call per chunk, and makes mistakes.</p></div>
+        <div class="card graphdb"><span class="kind">Reason 4</span><h4>Shallow links fit in SQL</h4><p>"Which team is this person in?" is one join in a database you already run. A graph database earns its place only when chains are long or of unknown length.</p></div>
+      </div>
+      <div class="use-skip wide">
+        <div><h3>Where a graph is the centre</h3><ul><li>Fraud rings, recommendations, social networks.</li><li>Dependencies: services, packages, supply chains.</li><li>Who may see what: permissions inherited through groups.</li><li>Organisation charts and ownership structures.</li><li>Research fields with dense, curated relationships: drugs and targets, case law and citations.</li></ul></div>
+        <div><h3>Where it is the wrong first step</h3><ul><li>A question-answering assistant over documents. Fix the search first.</li><li>Anything where you would have to invent the graph before having a question that needs it.</li><li>Small hierarchies a recursive SQL query handles.</li></ul></div>
+      </div>
+      <div class="callout graphdb">
+        <p><strong>Less common does not mean less useful.</strong> Where the question is about connections,
+          nothing else answers it: in this book, no amount of better search could name Maria's director
+          (<a href="11-graphrag.html">chapter 11</a>). The three source books reflect the same balance: <cite>AI Engineering</cite>
+          and <cite>Hands-On Large Language Models</cite> cover vector and keyword search at length, <cite>Prompt
+          Engineering for LLMs</cite> gives them a few pages, and none has a section on graph databases.</p>
+      </div>
+
+      <div class="book-says pe">
+        <cite>Prompt Engineering for LLMs · ch. 9, "Would a Conversational Agent Suffice?"</cite>
+        <p>The book tries to do a real job (marketing a Shopify plug-in to shops) with one conversational agent
+          and shows it failing in stages: with no tools it only writes a plan, and with search and email tools
+          it sends what is little more than a form letter. Its conclusion is the one systems 2, 4, 6 and 8
+          follow: split the job into tasks inside a workflow.</p>
+      </div>
+      <div class="book-says">
+        <cite>AI Engineering · ch. 6, "RAG Beyond Texts"</cite>
+        <p>System 6 is in the book as RAG over tabular data: a model writes a SQL query from the question and
+          the table schemas, the query runs, and the result is used to write the answer.</p>
+      </div>
+
+      <h3>The pieces each one uses</h3>
+      <table class="matrix">
+        <tr><th></th><th>Vector</th><th>Keyword</th><th>Reranker</th><th>Graph</th><th>Tools</th><th>Flow</th><th>Written answer</th></tr>
+        <tr><td>1. Chat with your documents</td><td class="on">●</td><td></td><td></td><td></td><td></td><td class="some">fixed</td><td class="on">●</td></tr>
+        <tr><td>2. Support bot</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td></td><td class="on">●</td><td class="some">workflow</td><td class="on">●</td></tr>
+        <tr><td>3. Enterprise search</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td class="some">often</td><td></td><td class="some">fixed</td><td class="on">●</td></tr>
+        <tr><td>4. Product search</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td></td><td></td><td class="some">fixed</td><td></td></tr>
+        <tr><td>5. Coding assistant</td><td class="some">often</td><td class="on">●</td><td></td><td></td><td class="on">●</td><td class="some">agent</td><td class="on">●</td></tr>
+        <tr><td>6. Business data</td><td class="some">schema</td><td></td><td></td><td></td><td class="on">●</td><td class="some">fixed + retry</td><td class="on">●</td></tr>
+        <tr><td>7. Fraud, recommendations</td><td class="some">sometimes</td><td></td><td></td><td class="on">●</td><td></td><td class="some">fixed</td><td class="some">optional</td></tr>
+        <tr class="you"><td><strong>8. Knowledge assistant</strong></td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td class="some">workflow</td><td class="on">●</td></tr>
+      </table>
+      <p class="caption">LangChain and LangGraph are left out on purpose: any of these can be written with them
+        or without. They change how the code looks, not what the system is.</p>
+    </section>
+
+    <section>
+      <p class="eyebrow">From the books</p>
+      <h2>Read more</h2>
+      <p>The chapters of the three source books that compare these techniques. Open a card to see what each
+        one says.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="RAG|Comparing retrieval algorithms|Combining retrieval algorithms|RAG Beyond Texts|Agents">
+          <span class="ref-book">AI Engineering</span><strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">RAG · Comparing retrieval algorithms · Combining retrieval algorithms · RAG Beyond Texts · Agents</span><span class="ref-open">What it says →</span></button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-8" data-sections="Dense Retrieval|Reranking|From Search to RAG">
+          <span class="ref-book">Hands-On Large Language Models</span><strong>Ch. 8 · Semantic Search and Retrieval-Augmented Generation</strong>
+          <span class="ref-sections">Dense Retrieval · Reranking · From Search to RAG</span><span class="ref-open">What it says →</span></button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-5" data-sections="Retrieval-Augmented Generation">
+          <span class="ref-book">Prompt Engineering for LLMs</span><strong>Ch. 5 · Prompt Content</strong>
+          <span class="ref-sections">Retrieval-Augmented Generation</span><span class="ref-open">What it says →</span></button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-9" data-sections="Would a Conversational Agent Suffice?|Basic LLM Workflows|Advanced LLM Workflows">
+          <span class="ref-book">Prompt Engineering for LLMs</span><strong>Ch. 9 · LLM Workflows</strong>
+          <span class="ref-sections">Would a Conversational Agent Suffice? · Basic LLM Workflows · Advanced LLM Workflows</span><span class="ref-open">What it says →</span></button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-10" data-sections="AI Engineering Architecture|AI Pipeline Orchestration">
+          <span class="ref-book">AI Engineering</span><strong>Ch. 10 · AI Engineering Architecture and User Feedback</strong>
+          <span class="ref-sections">AI Engineering Architecture · AI Pipeline Orchestration</span><span class="ref-open">What it says →</span></button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-7" data-sections="Finetuning and RAG">
+          <span class="ref-book">AI Engineering</span><strong>Ch. 7 · Finetuning</strong>
+          <span class="ref-sections">Finetuning and RAG</span><span class="ref-open">What it says →</span></button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>The scores and the docs assistant's examples are this book's own measurements (chapters 4 to 13).</li>
+          <li>The boxes marked with a book's name restate what that book says, in this book's words. Each was checked against the book's text.</li>
+          <li>The eight systems are typical designs, written from general knowledge. Only number 8 was built here (it is the docs assistant). The product names place each kind of system; they are not claims about how those products work inside.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

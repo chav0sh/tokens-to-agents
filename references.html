@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>References by book · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Extras · Where it comes from</p>
+    <h1>References by book</h1>
+    <p class="lead">This book stands on three others, on the tools' own documentation, and on code that was run
+      while it was written. This page says which chapter draws on which, and is honest about what was checked
+      and what was not.</p>
+
+    <section>
+      <h2>The three books</h2>
+      <h3><cite>AI Engineering</cite>, Chip Huyen (O'Reilly)</h3>
+      <p>The broadest of the three: evaluation, RAG and agents, finetuning, and running a system in production.
+        Read it for the reasoning behind the architecture.</p>
+      <table>
+        <tr><th>Its chapter</th><th>Used in this book's chapters</th></tr>
+        <tr><td>1. Introduction to Building AI Applications with Foundation Models</td><td><a href="00-start.html">Start here</a>, <a href="22-design-method.html">22</a>, <a href="23-reference-architectures.html">23</a>, <a href="24-build-plan.html">24</a></td></tr>
+        <tr><td>2. Understanding Foundation Models</td><td><a href="01-llm-api.html">1</a>, <a href="23-reference-architectures.html">23</a></td></tr>
+        <tr><td>3. Evaluation Methodology</td><td><a href="17-evals.html">17</a></td></tr>
+        <tr><td>4. Evaluate AI Systems</td><td><a href="03-choosing-a-model.html">3</a>, <a href="17-evals.html">17</a>, <a href="22-design-method.html">22</a></td></tr>
+        <tr><td>5. Prompt Engineering</td><td><a href="02-prompts.html">2</a>, <a href="18-guardrails.html">18</a></td></tr>
+        <tr><td>6. RAG and Agents</td><td><a href="04-rag.html">4</a> to <a href="09-chunking.html">9</a>, <a href="11-graphrag.html">11</a>, <a href="12-tool-calling.html">12</a>, <a href="13-workflows-and-agents.html">13</a>, <a href="15-langgraph.html">15</a>, <a href="16-memory-and-mcp.html">16</a>, <a href="23-reference-architectures.html">23</a></td></tr>
+        <tr><td>7. Finetuning</td><td><a href="20-finetuning.html">20</a></td></tr>
+        <tr><td>8. Dataset Engineering</td><td><a href="20-finetuning.html">20</a></td></tr>
+        <tr><td>9. Inference Optimization</td><td><a href="03-choosing-a-model.html">3</a>, <a href="19-monitoring.html">19</a></td></tr>
+        <tr><td>10. AI Engineering Architecture and User Feedback</td><td><a href="00-start.html">Start here</a>, <a href="14-langchain.html">14</a>, <a href="18-guardrails.html">18</a>, <a href="19-monitoring.html">19</a>, <a href="21-architecture.html">21</a>, <a href="22-design-method.html">22</a></td></tr>
+      </table>
+
+      <h3><cite>Hands-On Large Language Models</cite>, Jay Alammar and Maarten Grootendorst (O'Reilly)</h3>
+      <p>The most visual and the most code-heavy: what tokens and embeddings are, how search and RAG work, with
+        notebooks. Read it to see inside the parts.</p>
+      <table>
+        <tr><th>Its chapter</th><th>Used in this book's chapters</th></tr>
+        <tr><td>1. An Introduction to Large Language Models</td><td><a href="03-choosing-a-model.html">3</a></td></tr>
+        <tr><td>2. Tokens and Embeddings</td><td><a href="01-llm-api.html">1</a>, <a href="05-embeddings.html">5</a></td></tr>
+        <tr><td>6. Prompt Engineering</td><td><a href="01-llm-api.html">1</a>, <a href="02-prompts.html">2</a></td></tr>
+        <tr><td>7. Advanced Text Generation Techniques and Tools</td><td><a href="13-workflows-and-agents.html">13</a>, <a href="14-langchain.html">14</a>, <a href="16-memory-and-mcp.html">16</a></td></tr>
+        <tr><td>8. Semantic Search and Retrieval-Augmented Generation</td><td><a href="04-rag.html">4</a> to <a href="09-chunking.html">9</a>, <a href="17-evals.html">17</a></td></tr>
+        <tr><td>11. Fine-Tuning Representation Models for Classification; 12. Fine-Tuning Generation Models</td><td><a href="17-evals.html">17</a>, <a href="20-finetuning.html">20</a></td></tr>
+      </table>
+      <p class="caption">Not used here: its chapters on looking inside the transformer (3), text classification
+        and clustering (4, 5), multimodal models (9) and training embedding models (10).</p>
+
+      <h3><cite>Prompt Engineering for LLMs</cite>, John Berryman and Albert Ziegler (O'Reilly)</h3>
+      <p>The deepest on one thing: what goes into the prompt and how to assemble it, then tools, workflows and
+        evaluation from that angle. Read it when your failures are in prompts and context.</p>
+      <table>
+        <tr><th>Its chapter</th><th>Used in this book's chapters</th></tr>
+        <tr><td>2. Understanding LLMs</td><td><a href="01-llm-api.html">1</a></td></tr>
+        <tr><td>3. Moving to Chat</td><td><a href="01-llm-api.html">1</a></td></tr>
+        <tr><td>4. Designing LLM Applications</td><td><a href="00-start.html">Start here</a>, <a href="21-architecture.html">21</a>, <a href="22-design-method.html">22</a></td></tr>
+        <tr><td>5. Prompt Content</td><td><a href="02-prompts.html">2</a>, <a href="04-rag.html">4</a></td></tr>
+        <tr><td>6. Assembling the Prompt</td><td><a href="02-prompts.html">2</a></td></tr>
+        <tr><td>7. Taming the Model</td><td><a href="03-choosing-a-model.html">3</a></td></tr>
+        <tr><td>8. Conversational Agency</td><td><a href="02-prompts.html">2</a>, <a href="12-tool-calling.html">12</a>, <a href="13-workflows-and-agents.html">13</a>, <a href="16-memory-and-mcp.html">16</a></td></tr>
+        <tr><td>9. LLM Workflows</td><td><a href="13-workflows-and-agents.html">13</a>, <a href="15-langgraph.html">15</a>, <a href="22-design-method.html">22</a>, <a href="23-reference-architectures.html">23</a></td></tr>
+        <tr><td>10. Evaluating LLM Applications</td><td><a href="17-evals.html">17</a></td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>What the books do not cover</h2>
+      <p>Four topics in this book are in none of the three. Those chapters rest on the tools' own documentation
+        and on code that was run:</p>
+      <table>
+        <tr><th>Topic</th><th>Chapter</th><th>Based on</th></tr>
+        <tr><td>Graph databases and Cypher</td><td><a href="10-graph-databases.html">10</a></td><td>Neo4j's documentation; queries run against Neo4j 5.26.</td></tr>
+        <tr><td>GraphRAG</td><td><a href="11-graphrag.html">11</a></td><td>Runs of the book's app; Edge et al., <cite>From Local to Global: A Graph RAG Approach to Query-Focused Summarization</cite> (2024).</td></tr>
+        <tr><td>LangGraph</td><td><a href="15-langgraph.html">15</a></td><td>LangGraph's documentation; code run with langgraph 1.2.</td></tr>
+        <tr><td>MCP</td><td><a href="16-memory-and-mcp.html">16</a></td><td>The protocol's documentation; a server and client run with version 2.3 of the Python package.</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>How far to trust this book</h2>
+      <table>
+        <tr><th>Kind of content</th><th>How it was checked</th></tr>
+        <tr><td><strong>Numbers in worked examples</strong> (similarity scores, BM25, fusion, scoreboards, timings, token counts)</td><td>Computed or measured by the book's app on 2026-11-22. Rerun <code>app/assistant.py --eval</code> and <code>notes/figures.py</code> to reproduce the retrieval numbers exactly.</td></tr>
+        <tr><td><strong>Model answers quoted on a page</strong></td><td>Real outputs from one run on one small model. As chapter 17 shows, another run can differ.</td></tr>
+        <tr><td><strong>Code snippets</strong></td><td>Taken from the app, which was run, linted and type-checked. Some are shortened for the page.</td></tr>
+        <tr><td><strong>Explanations of how things work</strong></td><td>Written from the three books (each chapter lists the sections) and from general knowledge. Not independently reviewed by a second person.</td></tr>
+        <tr><td><strong>The pop-ups under "From the books"</strong></td><td>Notes on 141 sections of the three books, written by an AI model reading the books' text, in its own words. Checked by hand against the text on 2026-11-22: every chapter title, section title and number in them appears in its book, and a sample of claims was read against the passage it summarises. Details in <code>notes/refs/README.md</code>.</td></tr>
+        <tr><td><strong>Tables of tools and alternatives</strong></td><td>From general knowledge. <strong>Not</strong> checked against each product's current documentation, and this field changes fast: verify a tool before you adopt it.</td></tr>
+        <tr><td><strong>Features described but not run</strong></td><td>Named as such where they appear: LangGraph interrupts and durable savers, MCP resources and HTTP transport, prompt caching, gateways, semantic caches, finetuning, and all four designs in chapter 23.</td></tr>
+        <tr><td><strong>Prices</strong></td><td>Invented example prices in a realistic ratio. The sums are correct; the prices are not anyone's price list.</td></tr>
+      </table>
+      <p>The notes behind each part, including things that went wrong while writing, are in the
+        <code>notes</code> folder next to this book.</p>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

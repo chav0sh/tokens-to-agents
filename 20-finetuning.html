@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Finetuning: when you need it · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow reliability">Part 4 · Keeping it reliable · Chapter 20</p>
+    <h1>Finetuning: when you need it</h1>
+    <p class="lead">Finetuning means training an existing model further on your own examples, so its behaviour
+      changes. It is the one technique in this book that changes the model itself, and for most application
+      developers it is the last thing to try, not the first. This is a short chapter on purpose.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow reliability">The problem</p>
+      <h2>"Should we train our own model?"</h2>
+      <p>Every AI project hears this question early, usually as the answer to "the model doesn't know our
+        data". It is the wrong tool for that. The useful question is what kind of failure you have:</p>
+      <table>
+        <tr><th>The model fails because…</th><th>Example</th><th>The fix</th></tr>
+        <tr><td><strong>It lacks information</strong></td><td>It does not know your policies, or its knowledge is out of date.</td><td>Give it the information: retrieval (Part 2) or a tool (chapter 12).</td></tr>
+        <tr><td><strong>It behaves wrongly</strong></td><td>It knows enough, but the output has the wrong format, style or level of detail, however you prompt it.</td><td>A better prompt and examples first. If that is not enough: finetuning.</td></tr>
+      </table>
+      <p>One of the three books puts it in a line worth remembering: finetuning is for form, and RAG is for
+        facts.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow reliability">The picture</p>
+      <h2>The order to try things in</h2>
+      <figure class="canvas" aria-label="The order to try things: missing facts go to retrieval or a tool, wrong behaviour to a better prompt; if evals still fail on behaviour, finetune only with hundreds of good examples and a stable task">
+        <script type="application/json">{"cols": 3, "nodes": [
+          {"id": "a", "col": 1, "row": 1, "icon": "alert", "title": "Outputs are not good enough", "kind": "plain"},
+          {"id": "b", "col": 2, "row": 1, "icon": "gate", "title": "Missing facts, or wrong behaviour?", "kind": "reliability", "shape": "gate"},
+          {"id": "r", "col": 3, "row": 1, "icon": "search", "title": "Retrieval or a tool", "kind": "retrieval"},
+          {"id": "p", "col": 2, "row": 2, "icon": "doc", "title": "Better prompt", "kind": "model", "sub": "examples, smaller steps"},
+          {"id": "ev", "col": 3, "row": 2, "icon": "eval", "title": "Evals pass?", "kind": "reliability", "shape": "gate"},
+          {"id": "m", "col": 1, "row": 3, "icon": "spark", "title": "A stronger model", "kind": "model", "sub": "or collect examples"},
+          {"id": "d", "col": 2, "row": 3, "icon": "gate", "title": "Hundreds of good examples, and a stable task?", "kind": "reliability", "shape": "gate"},
+          {"id": "ship", "col": 3, "row": 3, "icon": "check", "title": "Ship", "kind": "plain", "shape": "end"},
+          {"id": "f", "col": 2, "row": 4, "icon": "key", "title": "Finetune", "kind": "model"}
+        ], "edges": [{"from": "a", "to": "b"}, {"from": "b", "to": "r", "label": "facts"}, {"from": "b", "to": "p", "label": "behaviour"}, {"from": "p", "to": "ev"}, {"from": "r", "to": "ev"}, {"from": "ev", "to": "ship", "label": "yes"}, {"from": "ev", "to": "d", "label": "no: behaviour", "via": "down"}, {"from": "d", "to": "f", "label": "yes"}, {"from": "d", "to": "m", "label": "no"}, {"from": "f", "to": "ev", "type": "alt"}]}</script>
+      </figure>
+      <p class="caption">Finetuning sits at the end of the line because every earlier step is cheaper, faster to
+        try, and easier to undo.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow reliability">How it works</p>
+      <h2>What it is, in builder's terms</h2>
+      <p>You collect examples of input and ideal output, usually a few hundred to a few thousand. A training
+        run adjusts the model's weights so that it produces outputs like yours. The result is a new model
+        version that you call like any other.</p>
+      <table>
+        <tr><th>Word</th><th>Meaning</th></tr>
+        <tr><td><strong>Full finetuning</strong></td><td>All the weights are updated. Needs serious hardware; rare for application teams.</td></tr>
+        <tr><td><strong>LoRA</strong> (and PEFT in general)</td><td>The model stays frozen; a small add-on with well under 1% as many weights is trained instead. Far cheaper, and the standard way today. PEFT means "parameter-efficient finetuning".</td></tr>
+        <tr><td><strong>Distillation</strong></td><td>A large model produces the examples; a small model is trained on them. The usual reason: the same quality on one task, at a fraction of the cost and latency.</td></tr>
+        <tr><td><strong>Quantization</strong></td><td>Storing the weights with fewer bits so the model fits on smaller hardware. Not training, but it turns up in the same conversations.</td></tr>
+      </table>
+
+      <h3>What it costs you</h3>
+      <table>
+        <tr><th>Cost</th><th>Detail</th></tr>
+        <tr><td><strong>Data</strong></td><td>Good examples are the real expense. The model learns your mistakes as faithfully as your good outputs.</td></tr>
+        <tr><td><strong>An eval, first</strong></td><td>Without chapter 17 you cannot tell whether the finetuned model is better.</td></tr>
+        <tr><td><strong>Upkeep</strong></td><td>When a better base model appears, your finetune does not move to it. You train again.</td></tr>
+        <tr><td><strong>Side effects</strong></td><td>A model tuned hard for one task can get worse at others.</td></tr>
+        <tr><td><strong>Serving</strong></td><td>A hosted finetune often costs more per token; an open model you tuned has to be run by someone (chapter 3).</td></tr>
+      </table>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow reliability">Use it when, skip it when</p>
+      <h2>The honest list</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Finetune when</h3>
+          <ul>
+            <li>You need a strict output format or house style that prompting cannot hold reliably.</li>
+            <li>A narrow, high-volume task could run on a much smaller, cheaper model: classification, extraction, routing.</li>
+            <li>The task is in a language, dialect or notation the model handles poorly.</li>
+            <li>The prompt has grown huge with examples, and you pay for it on every call.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Do not finetune when</h3>
+          <ul>
+            <li>The problem is missing or changing facts. Use retrieval; you update an index in minutes.</li>
+            <li>You have not yet tried a better prompt, examples, or a stronger model.</li>
+            <li>You have no eval and no set of good examples.</li>
+            <li>Users need to see where an answer came from. A finetuned model cannot cite what it absorbed.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow reliability">The tools</p>
+      <h2>The names in this slot</h2>
+      <table>
+        <tr><th>Route</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Hosted finetuning</td><td>The finetuning APIs of OpenAI, Google and others</td><td>Upload examples, get a model ID. The least work.</td></tr>
+        <tr><td>Open models, yourself</td><td>Hugging Face Transformers with the PEFT library · Unsloth · Axolotl</td><td>LoRA on a single GPU is realistic for small models.</td></tr>
+        <tr><td>Embedding and reranking models</td><td>sentence-transformers</td><td>Finetuning these on your own question-and-passage pairs is often a better investment than finetuning the generator.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow reliability">In the docs assistant</p>
+      <h2>Not here</h2>
+      <p>The assistant's failures in this book were all of the first kind or fixed without touching the model:</p>
+      <table>
+        <tr><th>Failure</th><th>Kind</th><th>Fixed by</th></tr>
+        <tr><td>It did not know the handbook.</td><td>Missing facts</td><td>Retrieval (chapter 4)</td></tr>
+        <tr><td>FIN-140 was confused with FIN-401.</td><td>Search</td><td>Keyword search and a reranker (chapters 7, 8)</td></tr>
+        <tr><td>It could not name Maria's director.</td><td>Missing facts</td><td>A graph query (chapter 11)</td></tr>
+        <tr><td>It decided 7 days were enough for 10.</td><td>Reasoning</td><td>The comparison moved into code (chapter 13)</td></tr>
+        <tr><td>It invented "file a police report".</td><td>Behaviour</td><td>Caught by the judge in the eval (chapter 17), which can also run as an output guard (chapter 18)</td></tr>
+      </table>
+      <p>Only the last row is a behaviour problem, and a check catches it. If this assistant ever answered ten
+        million routine questions a day, distilling it into a small model would become interesting. Until then,
+        the model stays as it came.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Take a failure from your own project and place it in the first table:
+          missing facts, or wrong behaviour? Most land in the first row.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow reliability">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-7" data-sections="When to Finetune|Reasons to Finetune|Reasons Not to Finetune|Finetuning and RAG|Finetuning Techniques|Parameter-Efficient Finetuning|LoRA">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 7 · Finetuning</strong>
+          <span class="ref-sections">When to Finetune · Reasons to Finetune · Reasons Not to Finetune · Finetuning and RAG · Finetuning Techniques · Parameter-Efficient Finetuning · LoRA</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-8" data-sections="Model Distillation">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 8 · Dataset Engineering</strong>
+          <span class="ref-sections">Model Distillation</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-12" data-sections="The Three LLM Training Steps|Parameter-Efficient Fine-Tuning (PEFT)|Low-Rank Adaptation (LoRA)|Instruction Tuning with QLoRA">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 12 · Fine-Tuning Generation Models</strong>
+          <span class="ref-sections">The Three LLM Training Steps · Parameter-Efficient Fine-Tuning (PEFT) · Low-Rank Adaptation (LoRA) · Instruction Tuning with QLoRA</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-11" data-sections="">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 11 · Fine-Tuning Representation Models for Classification</strong>
+          <span class="ref-sections">The whole chapter</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>Nothing in this chapter was run. The example counts ("a few hundred to a few thousand") and "well under 1%" for LoRA are typical figures, not measurements.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

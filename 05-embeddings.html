@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Embeddings · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow retrieval">Part 2 · Giving it context · Chapter 5</p>
+    <h1>Embeddings</h1>
+    <p class="lead">An embedding turns a text into a list of numbers, so that texts with similar meaning get
+      similar numbers. It is how a program finds "the passage about this" without sharing a single word with it.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow retrieval">The problem</p>
+      <h2>People don't use the document's words</h2>
+      <p>An employee asks: <em>"What do I do if my computer is stolen?"</em> The security policy says:
+        <em>"Report a lost device within 24 hours."</em> No word matches. <code>WHERE text LIKE '%stolen%'</code>
+        returns nothing, and so does a full-text index. You need a search that compares meaning, not letters.</p>
+
+      <p>This is the "retrieve" box of chapter 4, opened up. The examples use the same 14 chunks of the
+        handbook listed there.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow retrieval">The picture</p>
+      <h2>Text in, coordinates out</h2>
+      <ol class="steps wide">
+        <li class="node plain"><b>A text</b><span>"Report a lost device within 24 hours."</span></li>
+        <li class="node retrieval"><b>Embedding model</b><span>a small model trained so that similar texts land close together</span></li>
+        <li class="node retrieval"><b>A vector</b><span>384 numbers: −0.029, 0.008, −0.045, …</span></li>
+        <li class="node retrieval"><b>Compare</b><span>close vectors = similar meaning</span></li>
+      </ol>
+      <p>Think of the vector as coordinates on a map with 384 directions instead of two. Below, the 14 chunks
+        and two questions are squashed down to two directions so they can be drawn.</p>
+      <div class="figure wide">
+        <svg viewBox="0 0 760 390" role="img" aria-label="The fourteen chunks and two questions as points; similar texts sit close together">
+          <circle class="pt" cx="60" cy="124" r="6"/><text x="60" y="147" text-anchor="middle">1 parental leave</text>
+          <circle class="pt" cx="260" cy="82" r="6"/><text x="272" y="86">2 HR-2291</text>
+          <circle class="pt" cx="262" cy="56" r="6"/><text x="274" y="60">3 HR-2219</text>
+          <circle class="pt" cx="121" cy="110" r="6"/><text x="110" y="103" text-anchor="end">4 holiday</text>
+          <circle class="pt" cx="482" cy="50" r="6"/><text x="471" y="68" text-anchor="end">5 travel expenses</text>
+          <circle class="pt" cx="640" cy="30" r="6"/><text x="652" y="34">6 FIN-140</text>
+          <circle class="pt" cx="196" cy="125" r="6"/><text x="208" y="130">7 work from home</text>
+          <circle class="pt" cx="481" cy="350" r="6"/><text x="493" y="355">8 lost laptop</text>
+          <circle class="pt" cx="140" cy="107" r="6"/><text x="150" y="98">9 sick leave</text>
+          <circle class="pt" cx="438" cy="333" r="6"/><text x="427" y="337" text-anchor="end">10 new hires</text>
+          <circle class="pt" cx="517" cy="53" r="6"/><text x="529" y="50">11 HR-2192</text>
+          <circle class="pt" cx="526" cy="98" r="6"/><text x="538" y="106">12 HR-2912</text>
+          <circle class="pt" cx="574" cy="73" r="6"/><text x="586" y="78">13 FIN-401</text>
+          <circle class="pt" cx="353" cy="35" r="6"/><text x="365" y="32">14 overtime</text>
+          <rect class="q" x="491" y="290" width="12" height="12" rx="2" transform="rotate(45 497 296)"/><text class="qt" x="512" y="301">“my computer is stolen?”</text>
+          <rect class="q" x="134" y="149" width="12" height="12" rx="2" transform="rotate(45 140 155)"/><text class="qt" x="154" y="172">“time off for a new baby?”</text>
+        </svg>
+        <ul class="legend"><li class="retrieval">A chunk of the handbook</li><li class="flow">A question</li></ul>
+      </div>
+      <p class="caption">Real embeddings of the 14 chunks, reduced from 384 to 2 dimensions. That keeps about a
+        third of the variation, so distances here are approximate. Time off sits on the left, the forms and
+        expenses top right, the two laptop chunks bottom right. Each question lands next to its answer.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow retrieval">How it works</p>
+      <h2>Similarity is one number</h2>
+      <p>Two vectors are compared with <strong>cosine similarity</strong>: the cosine of the angle between them.
+        1 means the same direction, 0 means unrelated. It is a dot product divided by the two lengths; three
+        lines of code.</p>
+
+      <h3>Worked: "What do I do if my computer is stolen?"</h3>
+      <p>The question is embedded with the same model, then compared with all 14 chunk vectors:</p>
+      <div class="demo wide">
+        <div class="bars">
+          <span><strong>8</strong> lost laptop</span><div class="track"><div class="fill" style="width:73%; background: var(--c-retrieval)"></div></div><span class="val">0.73</span>
+          <span><strong>10</strong> new hires get a laptop</span><div class="track"><div class="fill" style="width:52%; background: var(--c-retrieval)"></div></div><span class="val">0.52</span>
+          <span><strong>12</strong> form HR-2912</span><div class="track"><div class="fill" style="width:51%; background: var(--c-retrieval)"></div></div><span class="val">0.51</span>
+          <span><strong>7</strong> work from home</span><div class="track"><div class="fill" style="width:41%; background: var(--c-retrieval)"></div></div><span class="val">0.41</span>
+          <span><strong>14</strong> overtime (lowest)</span><div class="track"><div class="fill" style="width:27%; background: var(--c-retrieval)"></div></div><span class="val">0.27</span>
+        </div>
+      </div>
+      <p>Chunk 8 wins clearly, with no shared word: the model has learned that "computer" is near "laptop" and
+        "stolen" is near "lost". Chunk 10 comes second because it also mentions a laptop.</p>
+      <div class="callout reliability">
+        <p><strong>Read the order, not the number.</strong> Chunks that have nothing to do with the question still score up to about 0.5 here, and 0.59 for another question in the eval, where two unrelated chunks tie with the right one. A score has no fixed meaning: 0.6 can be a strong
+          match with one model and a weak one with another. Take the top few results; if you need a cut-off,
+          measure it on your own data.</p>
+      </div>
+
+      <h3>Phrases, compared with "parental leave"</h3>
+      <table>
+        <tr><th>Phrase</th><th>Similarity</th><th></th></tr>
+        <tr><td>time off for a new baby</td><td>0.71</td><td>same meaning, no shared word</td></tr>
+        <tr><td>maternity</td><td>0.67</td><td>closely related</td></tr>
+        <tr><td>holiday</td><td>0.56</td><td>related: also time off</td></tr>
+        <tr><td>invoice</td><td>0.56</td><td>unrelated, yet the same score as "holiday"</td></tr>
+        <tr><td>laptop</td><td>0.50</td><td>unrelated</td></tr>
+      </table>
+      <p class="caption">Short phrases give noisier scores than full sentences. Another reason to trust ranks
+        over raw numbers.</p>
+
+      <h3>Four rules that save you a bad day</h3>
+      <table>
+        <tr><th>Rule</th><th>Why</th></tr>
+        <tr><td>Embed questions and documents with the <strong>same model</strong>.</td><td>Each model has its own map. Vectors from two models cannot be compared.</td></tr>
+        <tr><td>Changing the model means <strong>re-embedding everything</strong>.</td><td>It is a full reindex, like changing a column's collation.</td></tr>
+        <tr><td>Know the model's <strong>input limit</strong>.</td><td>Text beyond it is silently cut off. This is one reason documents are split into chunks (chapter 9).</td></tr>
+        <tr><td>Store the model's name next to the vectors.</td><td>So you can tell, later, which map a vector belongs to.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow retrieval">Use it when, skip it when</p>
+      <h2>What embeddings are good and bad at</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Use embeddings when</h3>
+          <ul>
+            <li>Users describe things in their own words: synonyms, paraphrases, typos.</li>
+            <li>Questions and documents may be in different languages (with a multilingual model).</li>
+            <li>You need "more like this": similar tickets, duplicate questions, clustering.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip, or add something, when</h3>
+          <ul>
+            <li>The query is an exact token: a form number, an error code, a surname. Add keyword search (chapter 7).</li>
+            <li>The question is a filter or a count: "all policies changed in 2026". That is SQL.</li>
+            <li>The whole corpus fits in the prompt. Then just send it.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow retrieval">The tools</p>
+      <h2>Embedding models</h2>
+      <table>
+        <tr><th>Slot</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Run locally</td><td><strong>fastembed (this book)</strong> · sentence-transformers</td><td>Small open models on a CPU. No API key, no cost per call, data stays local.</td></tr>
+        <tr><td>Hosted</td><td>OpenAI, Cohere, Google and Voyage AI embedding APIs</td><td>Larger models, paid per token. One more network call per query.</td></tr>
+        <tr><td>Open model families</td><td>BGE, E5, GTE, all-MiniLM</td><td>This book uses <code>BAAI/bge-small-en-v1.5</code>: 384 dimensions, English.</td></tr>
+        <tr><td>Comparing models</td><td>MTEB leaderboard</td><td>A public benchmark for embedding models. For the shortlist only; test on your data.</td></tr>
+      </table>
+      <p class="caption">More dimensions can hold finer distinctions and cost more memory per vector. A few
+        hundred is plenty to start with.</p>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow retrieval">In the docs assistant</p>
+      <h2>Inside retrieve(): every chunk gets a vector</h2>
+      <pre class="code"><code>import math
+from fastembed import TextEmbedding
+
+embedder = TextEmbedding("BAAI/bge-small-en-v1.5")   # downloads once, then runs on CPU
+
+def embed(texts: list[str]) -> list[list[float]]:
+    return [[float(x) for x in vector] for vector in embedder.embed(texts)]
+
+def cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    return dot / (math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b)))
+
+chunk_vectors = embed(CHUNK_TEXTS)                     # once, when the documents change
+question_vector = embed(["What do I do if my computer is stolen?"])[0]
+scores = [cosine(question_vector, v) for v in chunk_vectors]   # 0.73 for chunk 8</code></pre>
+      <p>For 14 chunks, comparing against every vector in a loop is the whole search engine. It stops being
+        enough at a few hundred thousand chunks, which is the next chapter.</p>
+
+      <h3>The scoreboard</h3>
+      <div class="scoreboard wide">
+        <div class="now"><b>11<small>/12</small></b><span>Vector search (this chapter)</span></div>
+        <div class="later"><b>?</b><span>Keyword search (ch. 7)</span></div>
+        <div class="later"><b>?</b><span>Both, fused (ch. 8)</span></div>
+        <div class="later"><b>?</b><span>Fused, then reranked (ch. 8)</span></div>
+      </div>
+      <p>All six questions phrased in everyday words are right. The one miss is a code:
+        <em>"When do I need FIN-140?"</em> returns the chunk about FIN-<strong>401</strong> first (0.72) and the
+        right chunk second (0.69). The model sees two near-identical strings and cannot tell which digits matter.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Run <code>app/assistant.py --explain</code> with a question in your own
+          words, then with a form code. Watch how close the top two scores are for codes.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow retrieval">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-2" data-sections="Token Embeddings|Text Embeddings (for Sentences and Whole Documents)">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 2 · Tokens and Embeddings</strong>
+          <span class="ref-sections">Token Embeddings · Text Embeddings (for Sentences and Whole Documents)</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-8" data-sections="Dense Retrieval">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 8 · Semantic Search and Retrieval-Augmented Generation</strong>
+          <span class="ref-sections">Dense Retrieval</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="Embedding-based retrieval">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">Embedding-based retrieval</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

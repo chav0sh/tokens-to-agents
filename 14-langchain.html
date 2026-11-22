@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangChain · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow flow">Part 3 · Building the flow · Chapter 14</p>
+    <h1>LangChain</h1>
+    <p class="lead">LangChain is the library this book has been using since chapter 1 without introducing it.
+      It is the best-known name in AI development and also the most misunderstood: it is not a model, not a
+      database and not required. It is a set of common interfaces, and a very large collection of adapters.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow flow">The problem</p>
+      <h2>Every provider speaks its own dialect</h2>
+      <p>OpenAI, Anthropic, Google and NVIDIA all offer "send messages, get a reply, maybe with tool calls". The
+        request shapes, field names, tool formats and error types all differ. So do the clients for Qdrant,
+        Pinecone and pgvector. Code written against one of them is glue you rewrite when you switch, and
+        chapter 3 said you will switch.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow flow">The picture</p>
+      <h2>One interface per kind of part</h2>
+      <div class="stack wide">
+        <div><strong>Your application</strong><span>The docs assistant: retrieve, prompt, call, check.</span></div>
+        <div class="you"><strong>LangChain's interfaces</strong><span>Chat model · message · prompt template · tool · structured output · retriever. The same methods whatever sits underneath.</span></div>
+        <div><strong>Integration packages</strong><span>langchain-openai · langchain-anthropic · langchain-google-genai · langchain-nvidia-ai-endpoints · langchain-qdrant · hundreds more. One adapter each.</span></div>
+        <div><strong>The actual services</strong><span>Model APIs, vector databases, search engines, document loaders.</span></div>
+      </div>
+      <p class="caption">If you know an ORM or a database driver interface (Go's <code>database/sql</code>,
+        Rails' ActiveRecord adapters), this is the same move: code against the interface, swap the driver.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow flow">How it works</p>
+      <h2>You have already used most of it</h2>
+      <table>
+        <tr><th>Piece</th><th>What it standardises</th><th>Where you met it</th></tr>
+        <tr><td><strong>Chat model</strong> (<code>ChatNVIDIA</code>, <code>ChatOpenAI</code>, …)</td><td><code>invoke(messages)</code> returns a message with <code>content</code>, <code>tool_calls</code>, <code>usage_metadata</code>.</td><td>Chapter 1</td></tr>
+        <tr><td><strong>Messages</strong></td><td>System, human, AI and tool messages, the same for every provider.</td><td>Chapters 1 and 12</td></tr>
+        <tr><td><strong><code>with_structured_output</code></strong></td><td>A pydantic schema in, a validated object out.</td><td>Chapter 1</td></tr>
+        <tr><td><strong>Prompt template</strong></td><td>A message list with named holes.</td><td>Chapter 2</td></tr>
+        <tr><td><strong><code>@tool</code> and <code>bind_tools</code></strong></td><td>A Python function becomes a tool description in each provider's format.</td><td>Chapter 12</td></tr>
+      </table>
+      <p>That list is the part worth having. The retrieval in chapters 4 to 9 deliberately used the databases'
+        own clients, so you could see every step.</p>
+
+      <h3>The pipe: chaining pieces</h3>
+      <p>Every LangChain piece is a "runnable": it has <code>invoke</code>, <code>batch</code> and
+        <code>stream</code>. The <code>|</code> operator connects them, the output of one becoming the input of
+        the next, like a Unix pipe:</p>
+      <pre class="code"><code>from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Rewrite the employee's question as a short search query. Reply with the query only."),
+    ("human", "{question}"),
+])
+chain = prompt | llm | StrOutputParser()       # template -> model -> plain string
+
+chain.invoke({"question": "hey, so my laptop got nicked on the train yesterday, what now??"})</code></pre>
+      <div class="out-box">'laptop stolen train yesterday report police insurance claim'</div>
+      <p>This is query rewriting from chapter 8, in three lines. Look at the output, though: the model added
+        "police insurance claim", which the employee never said. A rewritten query can drift, so it needs the
+        same scoreboard as any other change.</p>
+
+      <h3>A ready-made agent</h3>
+      <p>The loop written by hand in chapter 13 also comes prebuilt:</p>
+      <pre class="code"><code>from langchain.agents import create_agent
+
+agent = create_agent(llm, tools=[search_handbook, holiday_days_left], system_prompt=AGENT_SYSTEM)
+result = agent.invoke({"messages": [("user", "I'm Tom Ek. How many holiday days do I have left?")]})</code></pre>
+      <div class="out-box">ai:   tool call  holiday_days_left(employee='Tom Ek')
+tool: Tom Ek has 18 holiday days left this year.
+ai:   Tom Ek, you have 18 holiday days left this year. (Source: holiday_days_left)</div>
+      <p>The same three messages your own loop produced. Underneath, <code>create_agent</code> builds a LangGraph
+        graph, which is the next chapter.</p>
+
+      <h3>The family</h3>
+      <table>
+        <tr><th>Name</th><th>What it is</th></tr>
+        <tr><td><strong>langchain-core</strong></td><td>The interfaces: messages, prompts, tools, runnables. Small and stable.</td></tr>
+        <tr><td><strong>langchain</strong></td><td>Ready-made pieces built on the core, such as <code>create_agent</code>.</td></tr>
+        <tr><td><strong>langchain-&lt;provider&gt;</strong></td><td>One package per integration. You install only the ones you use.</td></tr>
+        <tr><td><strong>LangGraph</strong></td><td>Flows as graphs with saved state (chapter 15). A separate library that works with or without the rest.</td></tr>
+        <tr><td><strong>LangSmith</strong></td><td>A hosted product for tracing, evals and prompt versions (chapters 17 and 19). Optional and paid beyond a free tier.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow flow">Use it when, skip it when</p>
+      <h2>Take the interfaces, be careful with the rest</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Use it for</h3>
+          <ul>
+            <li>One interface over several model providers, so a model switch is configuration.</li>
+            <li>Structured output and tool calling without writing each provider's format yourself.</li>
+            <li>Access to an integration somebody already wrote.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Think twice when</h3>
+          <ul>
+            <li>You use one provider and make simple calls. Its own SDK is less to learn and to debug.</li>
+            <li>A ready-made chain hides the prompt it sends. If you cannot see the prompt, you cannot fix the answer.</li>
+            <li>You follow a tutorial or a book from a year or two ago. The library changed a great deal between versions, and old import paths and class names often no longer exist.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout reliability">
+        <p><strong>Pin your versions.</strong> AI libraries move fast and break names. A lock file
+          (<code>uv.lock</code>, like <code>Gemfile.lock</code> or <code>go.sum</code>) is what keeps a working
+          app working. The code in this book ran on langchain 1.4 and langgraph 1.2.</p>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow flow">The tools</p>
+      <h2>The alternatives</h2>
+      <table>
+        <tr><th>Name</th><th>Its centre of gravity</th></tr>
+        <tr><td><strong>LangChain (this book)</strong></td><td>Interfaces and integrations for everything; the largest ecosystem.</td></tr>
+        <tr><td>LlamaIndex</td><td>Getting your data in: loaders, indexes, RAG pipelines.</td></tr>
+        <tr><td>Haystack</td><td>Search and RAG pipelines, with a long history in search.</td></tr>
+        <tr><td>PydanticAI</td><td>Typed agents and structured output, in the style of FastAPI.</td></tr>
+        <tr><td>DSPy</td><td>Programs whose prompts are optimised automatically against an eval.</td></tr>
+        <tr><td>LiteLLM</td><td>Only the "one API over many models" part, often run as a proxy.</td></tr>
+        <tr><td>The provider's own SDK</td><td>No abstraction at all. A legitimate choice.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow flow">In the docs assistant</p>
+      <h2>What the assistant takes from LangChain</h2>
+      <table>
+        <tr><th>Used</th><th>Not used</th></tr>
+        <tr><td>The chat model class, messages, <code>@tool</code>, <code>bind_tools</code>, the prompt template.</td><td>Ready-made retrieval chains, document loaders, vector store wrappers, memory classes.</td></tr>
+      </table>
+      <p>The line is deliberate: LangChain where it removes provider differences, plain Python where the logic
+        is the product. Retrieval is where the scoreboard is won, so it stays in code you can read.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> If you have a key for another provider, install its package and replace
+          <code>ChatNVIDIA(...)</code> in <code>app/assistant.py</code> with that provider's chat class. Nothing
+          else should need to change. Then rerun a question.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow flow">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-7" data-sections="Model I/O: Loading Quantized Models with LangChain|Chains: Extending the Capabilities of LLMs">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 7 · Advanced Text Generation Techniques and Tools</strong>
+          <span class="ref-sections">Model I/O: Loading Quantized Models with LangChain · Chains: Extending the Capabilities of LLMs</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-10" data-sections="AI Pipeline Orchestration">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 10 · AI Engineering Architecture and User Feedback</strong>
+          <span class="ref-sections">AI Pipeline Orchestration</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>The LangChain code in <cite>Hands-On Large Language Models</cite> uses an earlier version of the library. The ideas carry over; some class names do not.</li>
+          <li>Both snippets were run on 2026-11-22 with langchain 1.4.9 and langchain-core 1.7.6. The list of alternatives is from general knowledge, not checked against each project's current docs.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

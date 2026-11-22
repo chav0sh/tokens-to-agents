@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vector databases · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow retrieval">Part 2 · Giving it context · Chapter 6</p>
+    <h1>Vector databases</h1>
+    <p class="lead">A vector database stores embeddings and answers one query fast: "which stored vectors are
+      nearest to this one?" It is an index type you have not used before, wrapped in a database you would
+      recognise.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow retrieval">The problem</p>
+      <h2>Comparing with everything is a full table scan</h2>
+      <p>Chapter 5 compared the question with all 14 chunks. That is exact, and fine for thousands of vectors.
+        At ten million chunks it means ten million cosine calculations per question. A B-tree cannot help:
+        it sorts along one dimension, and a vector has hundreds, with no single order that keeps neighbours
+        together. You need an index built for "near", not for "equal" or "less than".</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow retrieval">The picture</p>
+      <h2>HNSW: express lanes over a graph of neighbours</h2>
+      <p>The index most vector databases use is <strong>HNSW</strong> (hierarchical navigable small world).
+        Every vector is linked to a few of its nearest neighbours. On top sit thinner layers holding fewer
+        vectors with longer links. It is a skip list, in many dimensions.</p>
+      <div class="figure wide">
+        <svg viewBox="0 0 780 300" role="img" aria-label="Three layers of points. A search enters at the top layer, takes long jumps, drops a layer, takes shorter steps, and ends at the nearest point in the bottom layer.">
+          <rect class="layer" x="40" y="22" width="700" height="56" rx="12"/><text class="muted" x="728" y="42" text-anchor="end">Layer 2: few points, long jumps</text>
+          <rect class="layer" x="40" y="112" width="700" height="56" rx="12"/><text class="muted" x="728" y="132" text-anchor="end">Layer 1</text>
+          <rect class="layer" x="40" y="202" width="700" height="56" rx="12"/><text class="muted" x="728" y="222" text-anchor="end">Layer 0: every vector, short links</text>
+          <path class="link" d="M300 60 H640 M120 150 H300 M640 150 H700 M60 240 H120 M120 240 H200 M200 240 H300 M300 240 H380 M380 240 H460 M460 240 H520 M640 240 H700"/>
+          <path class="path" d="M120 60 H300 M300 150 H520 M520 150 H640 M640 240 H580"/>
+          <path class="drop" d="M300 60 V150 M640 150 V240"/>
+          <g><circle class="pt" cx="120" cy="60" r="7"/><circle class="pt" cx="300" cy="60" r="7"/><circle class="pt" cx="640" cy="60" r="7"/></g>
+          <g><circle class="pt" cx="120" cy="150" r="7"/><circle class="pt" cx="300" cy="150" r="7"/><circle class="pt" cx="520" cy="150" r="7"/><circle class="pt" cx="640" cy="150" r="7"/><circle class="pt" cx="700" cy="150" r="7"/></g>
+          <g><circle class="pt" cx="60" cy="240" r="7"/><circle class="pt" cx="120" cy="240" r="7"/><circle class="pt" cx="200" cy="240" r="7"/><circle class="pt" cx="300" cy="240" r="7"/><circle class="pt" cx="380" cy="240" r="7"/><circle class="pt" cx="460" cy="240" r="7"/><circle class="pt" cx="520" cy="240" r="7"/><circle class="pt" cx="580" cy="240" r="7"/><circle class="pt" cx="640" cy="240" r="7"/><circle class="pt" cx="700" cy="240" r="7"/></g>
+          <text x="120" y="97" text-anchor="middle" class="qt">start here</text>
+          <rect class="q" x="594" y="272" width="12" height="12" rx="2" transform="rotate(45 600 278)"/><text class="qt" x="614" y="283">the query</text>
+          <text x="580" y="226" text-anchor="middle" class="qt">nearest</text>
+        </svg>
+      </div>
+      <p class="caption">A sketch, flattened to one dimension. The search starts at the top, moves greedily
+        towards the query, and drops a layer whenever no neighbour is closer. It touches a handful of points
+        instead of all of them.</p>
+      <p>The price is in the name of the family: <strong>approximate</strong> nearest neighbour (ANN) search.
+        The greedy walk usually finds the true nearest vectors, not always. You trade a little recall for a
+        very large speed-up, and the index's settings move that trade.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow retrieval">How it works</p>
+      <h2>A point is three things</h2>
+      <table>
+        <tr><th>Part</th><th>What it is</th><th>Like</th></tr>
+        <tr><td><strong>ID</strong></td><td>Your key for the chunk.</td><td>A primary key.</td></tr>
+        <tr><td><strong>Vector</strong></td><td>The embedding. The only part that is indexed for "near".</td><td>An indexed column.</td></tr>
+        <tr><td><strong>Payload</strong></td><td>JSON you get back with a hit: the text, the document title, a date, who may read it.</td><td>The other columns.</td></tr>
+      </table>
+      <p>A <strong>collection</strong> holds points of one vector size, compared with one distance (cosine, dot
+        product or Euclidean). Use the distance the embedding model was trained for; for most text models that
+        is cosine.</p>
+
+      <h3>Filters: the WHERE clause</h3>
+      <p>Real searches are "nearest to this vector <em>and</em> department = HR <em>and</em> the user may read
+        it". A vector database applies the payload filter during the graph walk. Filtering afterwards is a trap:
+        ask for the top 5, filter out 4 the user may not see, and you are left with one result.</p>
+
+      <h3>The other index families, in one line each</h3>
+      <table>
+        <tr><th>Name</th><th>Idea</th><th>You meet it</th></tr>
+        <tr><td><strong>Flat (exact)</strong></td><td>Compare with everything.</td><td>Small collections, and as the reference when measuring recall.</td></tr>
+        <tr><td><strong>HNSW</strong></td><td>A layered graph of neighbours.</td><td>The default almost everywhere.</td></tr>
+        <tr><td><strong>IVF</strong></td><td>Cluster the vectors; search only the nearest clusters.</td><td>FAISS, pgvector's <code>ivfflat</code>.</td></tr>
+        <tr><td><strong>Quantization</strong></td><td>Store each vector compressed, with fewer bits.</td><td>A memory-saving setting on top of the others.</td></tr>
+      </table>
+
+      <h3>How big is it?</h3>
+      <p>One vector of 384 numbers at 4 bytes each is 1,536 bytes. So:</p>
+      <div class="callout retrieval">
+        <p>The docs assistant, 14 chunks: 22 KB.<br>
+          A 200-page handbook, about 380 chunks: <strong>0.6 MB</strong>.<br>
+          One million chunks: 1,000,000 × 1,536 bytes = <strong>1.5 GB</strong> of vectors, before the index's links and the payloads.</p>
+      </div>
+      <p>HNSW lives in memory for speed, so the last line is a RAM budget. That is where quantization and
+        smaller embedding models start to matter.</p>
+
+      <h3>Worked: the same question, through Qdrant</h3>
+      <div class="ranks wide">
+        <div class="retrieval"><h4>Exact loop (chapter 5)</h4><ol><li class="hit">8 lost laptop <b>0.73</b></li><li>10 new hires <b>0.52</b></li><li>12 form HR-2912 <b>0.51</b></li></ol></div>
+        <div class="retrieval"><h4>Qdrant, top 3</h4><ol><li class="hit">8 lost laptop <b>0.73</b></li><li>10 new hires <b>0.52</b></li><li>12 form HR-2912 <b>0.51</b></li></ol></div>
+      </div>
+      <p class="caption">Identical, as they should be on 14 points. The difference only shows at scale.</p>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow retrieval">Use it when, skip it when</p>
+      <h2>Do you need a new database?</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Use a vector database when</h3>
+          <ul>
+            <li>You have more vectors than a loop handles comfortably: roughly a hundred thousand and up.</li>
+            <li>You need filters, updates and deletes, and the index must survive a restart.</li>
+            <li>Several services search the same vectors.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip it when</h3>
+          <ul>
+            <li>A few thousand chunks: keep the vectors in memory and loop. It is exact and has no moving parts.</li>
+            <li>You already run Postgres: the <code>pgvector</code> extension adds a vector column and an HNSW index to the database you have.</li>
+            <li>You already run Elasticsearch or OpenSearch: both have vector search built in.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow retrieval">The tools</p>
+      <h2>The names in this slot</h2>
+      <table>
+        <tr><th>Kind</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Dedicated, open source</td><td><strong>Qdrant (this book)</strong> · Weaviate · Milvus · Chroma</td><td>Qdrant is one Docker container or one cloud URL, with strong payload filters. Chroma is the lightest for prototypes.</td></tr>
+        <tr><td>Dedicated, managed only</td><td>Pinecone</td><td>Nothing to run; pay per use.</td></tr>
+        <tr><td>Inside a database you have</td><td>pgvector (Postgres) · Elasticsearch / OpenSearch · Redis · MongoDB Atlas</td><td>One less system to operate. Often the right first choice.</td></tr>
+        <tr><td>A library, not a database</td><td>FAISS · hnswlib</td><td>Just the index, in your process. No server, no filters, no persistence unless you add them.</td></tr>
+      </table>
+      <p class="caption">They all do the same core job. Choose on what you already operate, on filtering needs
+        and on scale, not on benchmark charts.</p>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow retrieval">In the docs assistant</p>
+      <h2>The chunks move into Qdrant</h2>
+      <pre class="code"><code>from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, PointStruct, VectorParams
+
+qdrant = QdrantClient(":memory:")        # for tests; in production: QdrantClient(url="http://qdrant:6333")
+
+# Indexing: once, and again whenever the documents change.
+qdrant.create_collection("docs", vectors_config=VectorParams(size=384, distance=Distance.COSINE))
+qdrant.upsert("docs", points=[
+    PointStruct(id=chunk["id"], vector=vector, payload=chunk)      # payload: {"id", "doc", "text"}
+    for chunk, vector in zip(CHUNKS, chunk_vectors)
+])
+
+# Answering: embed the question, ask for the nearest three.
+hits = qdrant.query_points("docs", query=question_vector, limit=3).points
+for hit in hits:
+    print(hit.id, round(hit.score, 2), hit.payload["doc"])</code></pre>
+      <div class="out-box">8 0.73 Security policy
+10 0.52 Onboarding guide
+12 0.51 HR forms</div>
+      <p><code>":memory:"</code> runs the same API inside your process, so tests need no Docker. The
+        collection's <code>size</code> must match the embedding model; a mismatch is an error at insert time,
+        not a silent bug.</p>
+
+      <h3>The scoreboard</h3>
+      <div class="scoreboard wide">
+        <div class="now"><b>11<small>/12</small></b><span>Vector search, now in Qdrant</span></div>
+        <div class="later"><b>?</b><span>Keyword search (ch. 7)</span></div>
+        <div class="later"><b>?</b><span>Both, fused (ch. 8)</span></div>
+        <div class="later"><b>?</b><span>Fused, then reranked (ch. 8)</span></div>
+      </div>
+      <p>Unchanged, and that is the point: a vector database makes the same search fast and durable. It does
+        not make it smarter.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Add a <code>"year"</code> field to each chunk's payload and search with a
+          filter on it. Then check what the database you already run offers: Postgres has <code>pgvector</code>.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow retrieval">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="Embedding-based retrieval">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">Embedding-based retrieval</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-8" data-sections="Dense Retrieval">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 8 · Semantic Search and Retrieval-Augmented Generation</strong>
+          <span class="ref-sections">Dense Retrieval</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>Tool reference, checked 2026-11-22 by running the code above with <code>qdrant-client</code>: collections, points and payloads, <code>query_points</code>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

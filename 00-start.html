@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The whole system on one page · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Part 0 · Start here</p>
+    <h1>The whole system on one page</h1>
+    <p class="lead">Before any detail: this is where the book ends up. Every box below is a chapter. You don't
+      need to understand it yet, only to see that it is a pipeline with a database or two, like systems you
+      already build.</p>
+
+    <section>
+      <h2>The docs assistant, finished</h2>
+      <p>An employee asks "How many days of parental leave do I get?". The assistant finds the right passages in
+        the company's documents, hands them to a model with the question, and returns an answer that names its
+        sources. Two pipelines do the work: one prepares the documents, one answers questions.</p>
+
+      <div class="map">
+        <div class="band">
+          <h3>Indexing <small>runs when the documents change</small></h3>
+          <ol class="steps">
+            <li class="node plain"><b>Company docs</b><span>handbook, policies</span></li>
+            <li class="node retrieval"><p class="ch">ch. 9</p><b>Split into chunks</b><span>pieces small enough to search</span></li>
+            <li class="node retrieval"><p class="ch">ch. 5</p><b>Embed</b><span>text to vector</span></li>
+            <li class="node retrieval"><p class="ch">ch. 6</p><i>Vector database</i><b>Qdrant</b><span>search by meaning</span></li>
+          </ol>
+          <ol class="steps">
+            <li class="node plain"><b>Company docs</b><span>the same documents</span></li>
+            <li class="node retrieval"><p class="ch">ch. 9</p><b>Split into chunks</b><span>the same chunks</span></li>
+            <li class="node retrieval"><p class="ch">ch. 7</p><i>Keyword index</i><b>BM25</b><span>search by exact words</span></li>
+          </ol>
+          <ol class="steps">
+            <li class="node plain"><b>Org chart</b><span>who reports to whom</span></li>
+            <li class="node graphdb"><p class="ch">ch. 10–11</p><i>Graph database</i><b>Neo4j</b><span>search by connections</span></li>
+          </ol>
+        </div>
+        <p class="link-down">"Retrieve" reads all three indexes</p>
+        <div class="band">
+          <h3>Answering <small>runs on every question</small></h3>
+          <ol class="steps">
+            <li class="node plain"><b>Question</b></li>
+            <li class="node reliability"><p class="ch">ch. 18</p><b>Input guardrail</b><span>check what comes in</span></li>
+            <li class="node flow"><p class="ch">ch. 13–16</p><b>Flow</b><span>LangGraph picks the steps</span></li>
+            <li class="fork">
+              <div class="node retrieval"><p class="ch">ch. 4, 8</p><b>Retrieve, fuse, rerank</b><span>find the best passages</span></div>
+              <div class="node flow"><p class="ch">ch. 12</p><b>Tools</b><span>call your code</span></div>
+            </li>
+            <li class="node model"><p class="ch">ch. 2</p><b>Build the prompt</b><span>instructions + passages + question</span></li>
+            <li class="node reliability"><p class="ch">ch. 19</p><b>Cache</b><span>asked before? skip the model</span></li>
+            <li class="node model"><p class="ch">ch. 1, 3</p><b>Model API</b><span>prompt in, text out</span></li>
+            <li class="node reliability"><p class="ch">ch. 18</p><b>Output guardrail</b><span>check what goes out</span></li>
+            <li class="node plain"><b>Answer</b><span>with its sources</span></li>
+          </ol>
+        </div>
+        <div class="band">
+          <h3>Around every run <small>how you know it works</small></h3>
+          <ol class="steps loose">
+            <li class="node reliability"><p class="ch">ch. 17</p><b>Evals</b><span>known questions, scored on every change</span></li>
+            <li class="node reliability"><p class="ch">ch. 19</p><b>Run log</b><span>tokens, time, errors</span></li>
+          </ol>
+        </div>
+      </div>
+      <ul class="legend">
+        <li class="model">The model and its prompt</li>
+        <li class="retrieval">Finding context</li>
+        <li class="graphdb">Graph</li>
+        <li class="flow">Flow: tools, workflows, agents</li>
+        <li class="reliability">Keeping it reliable</li>
+      </ul>
+      <p class="caption">The five colours mean the same thing on every page of the book.</p>
+
+      <h3>Which chapter builds which box</h3>
+      <table>
+        <tr><th>Box</th><th>What it does</th><th>Chapter</th></tr>
+        <tr><td>Model API</td><td>Turns a prompt into text. Everything else exists to give it a good prompt.</td><td>1, 3</td></tr>
+        <tr><td>Build the prompt</td><td>Puts instructions, the found passages and the question into one text.</td><td>2</td></tr>
+        <tr><td>Embed, Qdrant</td><td>Finds passages by meaning: "time off for a new baby" finds "parental leave".</td><td>5, 6</td></tr>
+        <tr><td>BM25</td><td>Finds passages by exact words: a form number, a product code, a name.</td><td>7</td></tr>
+        <tr><td>Split into chunks</td><td>Cuts documents into pieces small enough to search and to fit in a prompt.</td><td>9</td></tr>
+        <tr><td>Retrieve, fuse, rerank</td><td>Runs the searches, merges their results, keeps the best few. Retrieval plus the model is RAG.</td><td>4, 8</td></tr>
+        <tr><td>Neo4j</td><td>Answers questions about connections: "who does Maria's manager report to?"</td><td>10, 11</td></tr>
+        <tr><td>Tools</td><td>Lets the model ask your code to do something: look up a balance, call an API.</td><td>12</td></tr>
+        <tr><td>Flow</td><td>Decides which steps run, in what order, and when to loop or stop.</td><td>13 to 16</td></tr>
+        <tr><td>Evals</td><td>The test suite: known questions with known answers, scored on every change.</td><td>17</td></tr>
+        <tr><td>Guardrails</td><td>Checks what goes in and what comes out.</td><td>18</td></tr>
+        <tr><td>Cache, run log</td><td>Saves repeated calls; records tokens, time and errors.</td><td>19</td></tr>
+      </table>
+
+      <div class="callout">
+        <p><strong>Nobody starts with this diagram.</strong> The first version is one line: question → model →
+          answer. Pieces are added only when a real failure asks for them: usually context first, then
+          guardrails, then routing, caching and agent logic. Chapter 21 walks that order.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>What AI engineering is</h2>
+      <p>AI engineering is building applications on top of a model that someone else trained. You don't design
+        or train the model. You call it over an API, and your work is everything around the call.</p>
+
+      <h3>Every AI application is this loop</h3>
+      <figure class="canvas" aria-label="The user's problem is turned into a prompt, the model continues the text, and the output is turned back into something the user can use">
+        <script type="application/json">{"cols": 4, "nodes": [
+          {"id": "u", "col": 1, "row": 1, "icon": "user", "title": "The user's problem", "kind": "plain"},
+          {"id": "p", "col": 2, "row": 1, "icon": "doc", "title": "Turn it into text", "kind": "model", "sub": "the prompt"},
+          {"id": "m", "col": 3, "row": 1, "icon": "spark", "title": "The model", "kind": "model", "sub": "continues the text"},
+          {"id": "t", "col": 4, "row": 1, "icon": "stream", "title": "Turn the output back", "kind": "model", "sub": "into something the user can use"}
+        ], "edges": [{"from": "u", "to": "p"}, {"from": "p", "to": "m"}, {"from": "m", "to": "t"}, {"from": "t", "to": "u", "type": "alt", "via": "bottom"}]}</script>
+      </figure>
+      <p>A model only reads text and writes text. So the app translates in both directions: the user's problem
+        into a prompt, and the model's output into an answer, a JSON object or an action. Retrieval, tools and
+        agents are all ways of making the first box better.</p>
+
+      <h3>Where you work: the top layer</h3>
+      <div class="stack">
+        <div class="you"><strong>Application development</strong>
+          <span>Prompts, context (retrieval and tools), evaluation, the interface. This book lives here.</span></div>
+        <div><strong>Model development</strong>
+          <span>Training, finetuning, datasets, making inference faster. One page of this book: chapter 20.</span></div>
+        <div><strong>Infrastructure</strong>
+          <span>Serving models, compute, data, monitoring. Mostly the back-end work you already know.</span></div>
+      </div>
+      <p>You start at the top and move down only when you have to. Many working products never leave the top
+        layer.</p>
+
+      <h3>What changes from the work you know</h3>
+      <table>
+        <tr><th></th><th>Back-end work</th><th>ML engineering</th><th class="you">AI engineering</th></tr>
+        <tr><td><strong>The core part</strong></td><td>Code you write</td><td>A model you train</td>
+          <td class="you">A model someone else trained, behind an API</td></tr>
+        <tr><td><strong>To change behaviour</strong></td><td>Change the code</td><td>Retrain with new data</td>
+          <td class="you">Change the prompt and the context. Finetune later, if ever</td></tr>
+        <tr><td><strong>Output</strong></td><td>The same for the same input</td><td>A label or a number</td>
+          <td class="you">Open-ended text that can differ between calls</td></tr>
+        <tr><td><strong>How you know it works</strong></td><td>Tests pass or fail</td><td>A metric on a test set</td>
+          <td class="you">Evals: scored cases, rerun on every change. The hardest part</td></tr>
+        <tr><td><strong>What costs</strong></td><td>Your servers</td><td>Training compute</td>
+          <td class="you">Tokens per call, and seconds of waiting</td></tr>
+      </table>
+      <p>Three differences matter most. You adapt a model instead of training one. The model is big, so each
+        call is slow and costs money. And the output is open-ended, so checking it is a real engineering problem,
+        not an afterthought.</p>
+
+      <div class="callout">
+        <p><strong>You don't need machine-learning theory to start.</strong> You need to know what goes into a
+          model (tokens), how to find the right text to give it (retrieval), how to steer it (prompts), and how
+          to check it (evals). The rest is software engineering.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>How to read this book</h2>
+      <p>Read in order: each chapter fixes a problem the one before it left open. Under every chapter title sits
+        the line you see at the top of this page. It shows the docs assistant so far, and lights up as pieces
+        are built.</p>
+
+      <h3>Every chapter has the same seven parts</h3>
+      <table>
+        <tr><th>Part</th><th>What you get</th></tr>
+        <tr><td>The problem</td><td>What breaks without this piece.</td></tr>
+        <tr><td>The picture</td><td>One diagram that carries the idea.</td></tr>
+        <tr><td>How it works</td><td>A small example with real numbers you can follow by hand.</td></tr>
+        <tr><td>Use it when, skip it when</td><td>When the piece earns its place, and when it is extra weight.</td></tr>
+        <tr><td>The tools</td><td>The names you will meet in this slot, and the one this book uses.</td></tr>
+        <tr><td>In the docs assistant</td><td>The system diagram with the new box, and a short snippet.</td></tr>
+        <tr><td>From the books</td><td>A card per book chapter. Open one to see what that chapter says about the topic and when it is worth reading.</td></tr>
+      </table>
+
+      <h3>Read with the app open</h3>
+      <p>The docs assistant is a real, small program in the <code>app</code> folder next to this book: one
+        Python file and one handbook. Most chapters end with a <strong>Try it</strong> box: a command to run or
+        one line to change. From chapter 4 on, a <strong>scoreboard</strong> shows how many of 12 test questions
+        the assistant gets right, so you can see what each new piece fixed.</p>
+
+      <div class="callout flow">
+        <p><strong>Short on time?</strong> Chapters 1, 2, 4, 12, 17 and 21 are the backbone: the model, prompts,
+          RAG, tools, evals and the architecture. Come back for the rest when a project needs it.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>From the books</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-1" data-sections="Three Layers of the AI Stack|AI Engineering Versus ML Engineering">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 1 · Introduction to Building AI Applications with Foundation Models</strong>
+          <span class="ref-sections">Three Layers of the AI Stack · AI Engineering Versus ML Engineering</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-10" data-sections="AI Engineering Architecture">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 10 · AI Engineering Architecture and User Feedback</strong>
+          <span class="ref-sections">AI Engineering Architecture</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-4" data-sections="The Anatomy of the Loop">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 4 · Designing LLM Applications</strong>
+          <span class="ref-sections">The Anatomy of the Loop</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

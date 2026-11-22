@@ -1,0 +1,35 @@
+[project]
+name = "tokens-to-agents"
+version = "1.0.0"
+description = "A visual book on AI engineering for back-end developers, with the app behind its numbers."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastembed==0.9.1",
+    "langchain-core==1.7.6",
+    "langchain-nvidia-ai-endpoints==1.5.0",
+    "langgraph==1.2.20",
+    "mcp==2.3.0",
+    "neo4j==6.4.1",
+    "numpy==2.5.4",
+    "pydantic==2.14.3",
+    "python-dotenv==1.2.4",
+    "qdrant-client==1.20.0",
+    "rank-bm25==0.2.2",
+]
+
+[tool.uv]
+package = false  # a book and its scripts, not an installable package
+default-groups = ["dev"]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+pythonVersion = "3.12"
+exclude = [".venv"]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.7.0",
+    "pyright==1.1.414",
+    "ruff==0.17.4",
+]

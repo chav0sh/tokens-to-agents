@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Keyword search: BM25 · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow retrieval">Part 2 · Giving it context · Chapter 7</p>
+    <h1>Keyword search: BM25</h1>
+    <p class="lead">BM25 is the classic formula for ranking documents by the words they share with a query. It
+      is decades older than embeddings, it is what Elasticsearch runs by default, and it is exactly right where
+      vector search is weakest: codes, names and rare terms.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow retrieval">The problem</p>
+      <h2>To an embedding, FIN-140 and FIN-401 are twins</h2>
+      <p>The scoreboard's one miss: <em>"When do I need FIN-140?"</em> Vector search put the FIN-401 chunk first
+        (0.72) and the right chunk second (0.69). An embedding captures what a text is <em>about</em>, and both
+        chunks are about a finance form. The exact digits barely move the vector.</p>
+      <p>A person searching for a form number, an error code, a product SKU or a surname wants the exact string.
+        That is a different kind of search.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow retrieval">The picture</p>
+      <h2>An inverted index: from word to documents</h2>
+      <ol class="steps wide">
+        <li class="node plain"><b>Text</b><span>"… using form FIN-140."</span></li>
+        <li class="node retrieval"><b>Tokenize</b><span>lowercase, split, drop common words</span></li>
+        <li class="node retrieval"><b>Tokens</b><span>using · form · fin · 140</span></li>
+        <li class="node retrieval"><b>Inverted index</b><span>each word points to the chunks that contain it</span></li>
+      </ol>
+      <table>
+        <tr><th>Word</th><th>Chunks that contain it</th><th>How rare</th></tr>
+        <tr><td><code>140</code></td><td>6</td><td>1 of 14: very telling</td></tr>
+        <tr><td><code>401</code></td><td>13</td><td>1 of 14: very telling</td></tr>
+        <tr><td><code>fin</code></td><td>5, 6, 13</td><td>3 of 14</td></tr>
+        <tr><td><code>form</code></td><td>2, 3, 5, 6, 11, 12, 13</td><td>7 of 14: says little</td></tr>
+        <tr><td><code>laptop</code></td><td>10</td><td>1 of 14</td></tr>
+        <tr><td><code>laptops</code></td><td>8</td><td>1 of 14, and a different word from <code>laptop</code></td></tr>
+      </table>
+      <p class="caption">The same structure as the index at the back of a book. A lookup touches only the rows
+        for the query's words, so it is fast at any size.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow retrieval">How it works</p>
+      <h2>Three ideas in one formula</h2>
+      <table>
+        <tr><th>Idea</th><th>Meaning</th></tr>
+        <tr><td><strong>Rare words count more</strong></td><td>A match on <code>140</code> (one chunk has it) says far more than a match on <code>form</code> (half of them do). This weight is called IDF, inverse document frequency.</td></tr>
+        <tr><td><strong>Repeats count, with a ceiling</strong></td><td>A word appearing twice is a stronger sign than once, but ten times is not ten times stronger.</td></tr>
+        <tr><td><strong>Long documents get no free points</strong></td><td>A long chunk contains more words by chance, so its matches are scaled down.</td></tr>
+      </table>
+      <p>For each word of the query that the chunk contains, multiply the word's rarity by its frequency part,
+        and add them up:</p>
+      <div class="formula">score = Σ  rarity(word) × frequency_part(word, chunk)
+
+rarity = ln( (N − n + 0.5) / (n + 0.5) )          N chunks in total, n contain the word
+frequency_part = f × 2.5 / ( f + 1.5 × (0.25 + 0.75 × length / average_length) )</div>
+      <p class="caption">With the usual settings k1 = 1.5 and b = 0.75. f is how often the word appears in the chunk.</p>
+
+      <h3>Worked: "When do I need FIN-140?"</h3>
+      <p>After dropping the common words, the query is three tokens: <code>need</code>, <code>fin</code>,
+        <code>140</code>. There are 14 chunks, 10.86 tokens long on average.</p>
+      <table>
+        <tr><th>Word</th><th>In how many chunks</th><th>Rarity</th><th>Chunk 6 (13 tokens)</th><th>Chunk 13 (8 tokens)</th></tr>
+        <tr><td><code>need</code></td><td>1</td><td>ln(13.5 ÷ 1.5) = 2.197</td><td>2.197 × 0.918 = 2.02</td><td>not there: 0</td></tr>
+        <tr><td><code>fin</code></td><td>3</td><td>ln(11.5 ÷ 3.5) = 1.190</td><td>1.190 × 0.918 = 1.09</td><td>1.190 × 1.134 = 1.35</td></tr>
+        <tr><td><code>140</code></td><td>1</td><td>2.197</td><td>2.197 × 0.918 = 2.02</td><td>not there: 0</td></tr>
+        <tr><td><strong>Score</strong></td><td></td><td></td><td><strong>5.13</strong></td><td><strong>1.35</strong></td></tr>
+      </table>
+      <div class="ranks wide">
+        <div class="reliability"><h4>Vector search</h4><ol><li class="miss">13 FIN-401 <b>0.72</b></li><li>6 FIN-140 <b>0.69</b></li><li>5 travel expenses <b>0.65</b></li></ol><p>Wrong chunk first. A margin of 0.03.</p></div>
+        <div class="retrieval"><h4>BM25</h4><ol><li class="hit">6 FIN-140 <b>5.13</b></li><li>13 FIN-401 <b>1.35</b></li><li>5 travel expenses <b>1.14</b></li></ol><p>Right chunk first, by a factor of almost four.</p></div>
+      </div>
+
+      <h3>And where it fails</h3>
+      <p>BM25 only sees letters. It has no idea what a word means:</p>
+      <table>
+        <tr><th>Question</th><th>BM25 returns</th><th>Why</th></tr>
+        <tr><td>What do I do if my computer is stolen?</td><td>Nothing at all.</td><td>The policy says "laptops" and "lost device". No shared word.</td></tr>
+        <tr><td>How much time off do I get for a new baby?</td><td>"<strong>New</strong> hires receive a laptop…"</td><td>It matched the word "new".</td></tr>
+        <tr><td>What do I earn for extra hours?</td><td>"…lost device within 24 <strong>hours</strong>."</td><td>It matched "hours". The overtime chunk says "hourly".</td></tr>
+      </table>
+
+      <h3>The tokenizer is half the result</h3>
+      <table>
+        <tr><th>Choice</th><th>Effect</th></tr>
+        <tr><td>The same tokenizer for documents and queries</td><td>Otherwise "FIN-140." never matches "fin-140".</td></tr>
+        <tr><td>Stop words (the, is, for, …)</td><td>Dropped here. With them kept, an early run of this app ranked a chunk second purely because it shared "is" and "for" with the question.</td></tr>
+        <tr><td>Stemming (laptops → laptop, hourly → hour)</td><td>Not done here, which is why "hours" missed "hourly". Search engines do it per language.</td></tr>
+        <tr><td>How codes are split</td><td>"FIN-140" became <code>fin</code> + <code>140</code>. Keeping it whole would make it even more exact.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow retrieval">Use it when, skip it when</p>
+      <h2>Where keywords win</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Use keyword search when</h3>
+          <ul>
+            <li>Queries contain identifiers: codes, part numbers, error messages, names, legal references.</li>
+            <li>The vocabulary is specialised, and an embedding model may never have seen the terms.</li>
+            <li>You need to explain a result: "it matched these words" is easy to show.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Don't rely on it alone when</h3>
+          <ul>
+            <li>People ask in their own words. Six of our twelve questions do, and it gets one of them.</li>
+            <li>Questions and documents are in different languages.</li>
+            <li>Queries are long and conversational: many common words, little signal.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow retrieval">The tools</p>
+      <h2>You may already run one</h2>
+      <table>
+        <tr><th>Kind</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Search engines</td><td>Elasticsearch, OpenSearch (both on Lucene)</td><td>BM25 is the default ranking. The production standard for keyword search, with stemming per language.</td></tr>
+        <tr><td>In your database</td><td>SQLite FTS5 (has a <code>bm25()</code> function) · Postgres full-text search (its own ranking, not BM25)</td><td>Good enough to start, with nothing new to operate.</td></tr>
+        <tr><td>In the vector database</td><td>Qdrant, Weaviate, Milvus: keyword or "sparse vector" search next to the dense vectors</td><td>One system for both searches.</td></tr>
+        <tr><td>A library</td><td><strong>rank-bm25 (this book)</strong></td><td>Pure Python, in memory, rebuilt at start-up. Right for thousands of chunks, not millions.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow retrieval">In the docs assistant</p>
+      <h2>A second search, next to the first</h2>
+      <pre class="code"><code>import re
+from rank_bm25 import BM25Okapi
+
+STOP_WORDS = {"a", "an", "and", "are", "do", "for", "i", "is", "my", "of", "the", "to", "what", "when", ...}
+
+def tokenize(text: str) -> list[str]:
+    return [word for word in re.findall(r"[a-z0-9]+", text.lower()) if word not in STOP_WORDS]
+
+bm25 = BM25Okapi([tokenize(chunk["text"]) for chunk in CHUNKS])     # the index: built once, in memory
+
+def keyword_search(question: str) -> list[tuple[int, float]]:
+    scores = bm25.get_scores(tokenize(question))
+    best = sorted(range(len(CHUNKS)), key=lambda i: scores[i], reverse=True)[:3]
+    return [(i + 1, float(scores[i])) for i in best if scores[i] > 0]   # no shared word: not a result</code></pre>
+
+      <h3>The scoreboard</h3>
+      <div class="scoreboard wide">
+        <div><b>11<small>/12</small></b><span>Vector search</span></div>
+        <div class="now"><b>7<small>/12</small></b><span>Keyword search (this chapter)</span></div>
+        <div class="later"><b>?</b><span>Both, fused (ch. 8)</span></div>
+        <div class="later"><b>?</b><span>Fused, then reranked (ch. 8)</span></div>
+      </div>
+      <p>Worse overall, and that is not the interesting part. Look at <em>which</em> questions each one gets:</p>
+      <table>
+        <tr><th></th><th>6 questions in everyday words</th><th>6 questions about a form code</th></tr>
+        <tr><td>Vector search</td><td>6 right</td><td>5 right</td></tr>
+        <tr><td>Keyword search</td><td>1 right</td><td>6 right</td></tr>
+      </table>
+      <p>They fail on different questions. The one vector search misses, keyword search gets. That is the
+        argument for running both, which is the next chapter.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Remove a word from <code>STOP_WORDS</code> in <code>app/assistant.py</code>
+          and rerun <code>--eval</code>. Then make <code>tokenize</code> strip a trailing "s" and see whether
+          "laptops" starts matching "laptop".</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow retrieval">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="Term-based retrieval|Comparing retrieval algorithms">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">Term-based retrieval · Comparing retrieval algorithms</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-8" data-sections="Reranking">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 8 · Semantic Search and Retrieval-Augmented Generation</strong>
+          <span class="ref-sections">Reranking</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>Numbers on this page: <code>notes/figures.py</code>, run on 2026-11-22 with <code>rank-bm25</code>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

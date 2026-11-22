@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tool calling · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow flow">Part 3 · Building the flow · Chapter 12</p>
+    <h1>Tool calling</h1>
+    <p class="lead">A model can only write text. Tool calling is the convention that lets it ask <em>your
+      code</em> to do something: look up a record, run a search, send a request. It is the step from "a model that
+      answers" to "a model that can use your systems".</p>
+
+    <section data-s="problem">
+      <p class="eyebrow flow">The problem</p>
+      <h2>The answer is in a system, not in a document</h2>
+      <p>Maria asks: <em>"Do I have enough holiday left to take 10 days off?"</em> The handbook says how many
+        days employees get. How many <em>Maria</em> has left is a row in the HR system. Retrieval over documents
+        will never find it, and the model cannot query anything. Something has to call the HR system, and that
+        something is your code.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow flow">The picture</p>
+      <h2>The model asks; your code acts</h2>
+      <ol class="steps wide">
+        <li class="node plain"><b>1. You send</b><span>the question, and a description of each tool</span></li>
+        <li class="node model"><b>2. The model replies</b><span>not with text, but with "call this tool with these arguments"</span></li>
+        <li class="node flow new"><b>3. Your code runs it</b><span>an ordinary function call</span></li>
+        <li class="node plain"><b>4. You send the result</b><span>as one more message</span></li>
+        <li class="node model"><b>5. The model answers</b><span>using the result</span></li>
+      </ol>
+      <div class="callout flow">
+        <p><strong>The model never executes anything.</strong> It writes a small piece of JSON naming a function
+          and its arguments. Whether that function runs, with which permissions, and what happens if it fails is
+          entirely your code's decision. That is where the safety of the whole system lives.</p>
+      </div>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow flow">How it works</p>
+      <h2>A tool is a function plus a description</h2>
+
+      <h3>What the model is given</h3>
+      <p>For each tool: a name, a sentence saying what it is for, and the arguments as a JSON schema. A library
+        builds this from your function's signature and docstring:</p>
+      <pre class="code"><code>@tool
+def holiday_days_left(employee: str) -> str:
+    """How many paid holiday days an employee has left this year. Needs the employee's full name."""
+    ...</code></pre>
+      <div class="out-box">name:        holiday_days_left
+description: How many paid holiday days an employee has left this year. Needs the employee's full name.
+arguments:   {"type": "object", "properties": {"employee": {"type": "string"}}, "required": ["employee"]}</div>
+      <p>The docstring is a prompt. It is the only thing the model knows about the tool, so it decides whether
+        the tool gets called at the right moment.</p>
+
+      <h3>What the model sends back</h3>
+      <p>Given Maria's question and two tools, this is the model's real reply:</p>
+      <div class="out-box" style="margin-top: 0; border-radius: 16px">content:    ''
+tool_calls: [{'name': 'holiday_days_left', 'args': {'employee': 'Maria Lind'}, 'id': 'call-6e65…'}]
+usage:      {'input_tokens': 421, 'output_tokens': 28}</div>
+      <p>No text, one tool call. Note the 421 input tokens for a one-line question: the tool descriptions are
+        sent with <em>every</em> request. Twenty tools with long descriptions is a real cost, and makes the
+        model's choice harder.</p>
+
+      <h3>The round trip</h3>
+      <table>
+        <tr><th>Message</th><th>From</th><th>Content</th></tr>
+        <tr><td>1</td><td>system</td><td>Use the tools to look things up. Never guess a number or a rule.</td></tr>
+        <tr><td>2</td><td>user</td><td>I'm Maria Lind. I want to take 10 days off next month. Do I have enough holiday left?</td></tr>
+        <tr><td>3</td><td>assistant</td><td><em>tool call:</em> <code>holiday_days_left(employee="Maria Lind")</code></td></tr>
+        <tr><td>4</td><td>tool</td><td>Maria Lind has 7 holiday days left this year.</td></tr>
+        <tr><td>5</td><td>assistant</td><td>…the answer, or another tool call.</td></tr>
+      </table>
+      <p>The conversation is still stateless (chapter 1): each request carries all the messages so far,
+        including the tool results.</p>
+
+      <h3>Three kinds of tool</h3>
+      <table>
+        <tr><th>Kind</th><th>Examples</th><th>Risk</th></tr>
+        <tr><td><strong>Read</strong></td><td>Search, look up a record, query a database, fetch a page.</td><td>Low. The worst case is a wrong or leaked fact, so check who is allowed to read what.</td></tr>
+        <tr><td><strong>Compute</strong></td><td>A calculator, a date function, running code.</td><td>Low to medium. This is how you get exact arithmetic out of a system built on a model.</td></tr>
+        <tr><td><strong>Write</strong></td><td>Send an email, create a ticket, change a record, pay.</td><td>High. A wrong call changes the world. Require confirmation, or keep a person in the loop.</td></tr>
+      </table>
+
+      <h3>Writing tools the model can use</h3>
+      <table>
+        <tr><th>Do</th><th>Because</th></tr>
+        <tr><td>Name it for what it does: <code>holiday_days_left</code>, not <code>hr_api_v2</code>.</td><td>The name is part of the prompt.</td></tr>
+        <tr><td>Say when to use it, and what the arguments must look like.</td><td>"Needs the full name" prevents a call with "Maria".</td></tr>
+        <tr><td>Few tools, few arguments, simple types.</td><td>Every option is a chance to choose wrongly.</td></tr>
+        <tr><td>Return errors as readable text: "No employee called 'Maria'."</td><td>The model reads the result. Given a clear error it can correct itself; given a stack trace it cannot.</td></tr>
+        <tr><td>Validate the arguments and check permissions inside the function.</td><td>The arguments come from a model reading user text. Treat them like any request from the internet.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow flow">Use it when, skip it when</p>
+      <h2>A tool or just code?</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Use tool calling when</h3>
+          <ul>
+            <li>The model must decide <em>whether</em> and <em>which</em> lookup is needed, from the user's words.</li>
+            <li>The data is live or per-user: balances, orders, tickets, calendars.</li>
+            <li>The task needs exact computation or an action in another system.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip it when</h3>
+          <ul>
+            <li>You already know the lookup is needed. Call the function yourself and put the result in the prompt: cheaper, faster, and it cannot be skipped. Chapter 13 compares the two.</li>
+            <li>The action is risky and nothing checks it.</li>
+            <li>The model you use handles tools badly. Small models often do; test before you rely on it.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow flow">The tools</p>
+      <h2>The same idea under several names</h2>
+      <table>
+        <tr><th>Name</th><th>Where</th><th>Notes</th></tr>
+        <tr><td>Tool calling, function calling, tool use</td><td>Every major model API</td><td>Three names for the same feature. The request has a list of tools; the reply may contain tool calls.</td></tr>
+        <tr><td><strong><code>@tool</code> and <code>bind_tools</code> (this book)</strong></td><td>LangChain</td><td>Builds the schema from a Python function and gives one interface over the providers.</td></tr>
+        <tr><td>Structured output</td><td>Chapter 1</td><td>Often implemented as tool calling underneath: the "tool" is your schema, and the model is required to call it.</td></tr>
+        <tr><td>MCP</td><td>Chapter 16</td><td>A standard way to offer tools from a separate server, so many apps can share them.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow flow">In the docs assistant</p>
+      <h2>Two tools</h2>
+      <p>The assistant gets a lookup into a (made-up) HR system, and its own handbook search wrapped as a tool.
+        They live in <code>app/agent.py</code>.</p>
+      <pre class="code"><code>from langchain_core.tools import tool
+
+HOLIDAY_DAYS_LEFT = {"Maria Lind": 7, "Tom Ek": 18, "Jonas Berg": 3}   # stands in for the HR system
+
+@tool
+def search_handbook(question: str) -> str:
+    """Search the company handbook. Use for any question about company policy or forms."""
+    return "\n".join(f"[{chunk['doc']}] {chunk['text']}" for chunk in retrieve(question))   # chapters 4 to 9
+
+@tool
+def holiday_days_left(employee: str) -> str:
+    """How many paid holiday days an employee has left this year. Needs the employee's full name."""
+    if employee not in HOLIDAY_DAYS_LEFT:
+        return f"No employee called {employee!r}."        # an error the model can read and react to
+    return f"{employee} has {HOLIDAY_DAYS_LEFT[employee]} holiday days left this year."
+
+model = llm.bind_tools([search_handbook, holiday_days_left])
+reply = model.invoke([("system", AGENT_SYSTEM), ("human", question)])
+print(reply.tool_calls)</code></pre>
+      <p>Notice that retrieval itself has become a tool. This is a common design: instead of always searching,
+        the model searches when it judges it needs to, and writes the search query itself.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> With a model key set, run <code>uv run python app/agent.py</code>
+          and read the first block of output. Then change a tool's docstring to something vague ("HR function")
+          and see whether the model still picks it.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow flow">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="Tools|Function calling">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">Tools · Function calling</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-8" data-sections="Tool Usage|LLMs Trained for Tool Usage|Guidelines for Tool Definitions">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 8 · Conversational Agency</strong>
+          <span class="ref-sections">Tool Usage · LLMs Trained for Tool Usage · Guidelines for Tool Definitions</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>The reply shown is from a run on 2026-11-22 (<code>app/agent.py</code>, <code>nvidia/nemotron-3.5-lightning-30b-a3b</code>). The schema box is shortened from what LangChain generates.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

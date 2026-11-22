@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prompts · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Part 1 · The model · Chapter 2</p>
+    <h1>Prompts</h1>
+    <p class="lead">The prompt is the only input the model has. Your program writes it fresh for every request,
+      from fixed parts and found parts. This chapter is about what goes in, in what order, and how to fit it in
+      the window.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow">The problem</p>
+      <h2>A bare question gets a confident guess</h2>
+      <p>Send the model only "How long is parental leave?" and it answers fluently, from what it read on the
+        internet during training. It does not know your company, so the answer is about some average company.
+        It will not tell you that. A model with nothing to go on does not say "I don't know" unless you make
+        that an allowed answer.</p>
+      <p>Everything the model should know or obey has to be in the text you send: the rules, the facts, the
+        question, and the shape of the answer you want.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow">The picture</p>
+      <h2>A prompt is a document your code assembles</h2>
+      <div class="prompt-doc wide">
+        <div class="model"><pre>You answer employees' questions about company policy.
+Use only the passages below. If they don't contain the answer, say you don't know.
+Name the document you used.</pre><small><b>Instructions</b>Fixed. The role, the rules, the way out.</small></div>
+        <div class="flow"><pre>Q: Can I carry over unused holiday?
+A: Yes, up to 5 days into the next year. [Holiday policy]</pre><small><b>Examples</b>Fixed. Show the format instead of describing it.</small></div>
+        <div class="retrieval"><pre>[Leave policy] Employees get 12 weeks of paid parental leave.
+[Leave policy] Leave must be requested 30 days in advance.
+…</pre><small><b>Context</b>Changes per request. Found by retrieval (Part 2). The biggest part.</small></div>
+        <div class="plain"><pre>Question: How long is parental leave?</pre><small><b>The question</b>Changes per request. From the user.</small></div>
+        <div class="model"><pre>Answer in one or two sentences, then the source in brackets.</pre><small><b>Refocus</b>Fixed. Repeat what you want, last.</small></div>
+      </div>
+      <p>The order is deliberate. Models use the start and the end of a prompt best, and the middle worst. So the
+        rules go first, the request is repeated last, and the bulk of the context sits between them, best
+        passage nearest the question.</p>
+
+      <h3>The assembly line</h3>
+      <ol class="steps wide">
+        <li class="node plain"><b>Collect</b><span>everything that might help</span></li>
+        <li class="node model"><b>Rank</b><span>how much does each piece matter?</span></li>
+        <li class="node model"><b>Fit</b><span>keep the best until the token budget is full</span></li>
+        <li class="node model"><b>Order</b><span>rules first, question last</span></li>
+        <li class="node plain"><b>Send</b></li>
+      </ol>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow">How it works</p>
+      <h2>Three techniques and one budget</h2>
+
+      <h3>The three techniques everyone uses</h3>
+      <table>
+        <tr><th>Name</th><th>What you add</th><th>Use it for</th><th>Cost</th></tr>
+        <tr><td><strong>Zero-shot</strong></td><td>Instructions only.</td><td>The default. Start here.</td><td>None.</td></tr>
+        <tr><td><strong>Few-shot</strong></td><td>A handful of example inputs with the output you want.</td><td>A format, tone or judgement that is easier to show than to describe.</td><td>More input tokens. The model may copy the examples too closely.</td></tr>
+        <tr><td><strong>Chain of thought</strong></td><td>"Reason step by step, then answer."</td><td>Problems with several steps: compare, calculate, apply a rule to a case.</td><td>More output tokens, so slower and dearer.</td></tr>
+      </table>
+      <div class="callout flow">
+        <p><strong>Why "think first" works:</strong> the model writes one token at a time and cannot go back. If
+          the answer comes first, the reasoning after it is only a justification. Ask for the reasoning first
+          and the answer is written with the reasoning already on the page. The same goes for JSON: put the
+          <code>reason</code> field before the <code>answer</code> field.</p>
+      </div>
+      <p>Many current models have a built-in reasoning mode ("thinking") that does this for you. The thinking
+        tokens are billed as output. For a simple lookup, turn it down.</p>
+
+      <h3>The token budget, worked</h3>
+      <p>Retrieval found 12 passages of about 700 tokens each. The window is 8,000 tokens. What fits?</p>
+      <table>
+        <tr><th>Part</th><th>Tokens</th><th>Left</th></tr>
+        <tr><td>The window</td><td></td><td>8,000</td></tr>
+        <tr><td>Reserved for the answer</td><td>− 500</td><td>7,500</td></tr>
+        <tr><td>Instructions</td><td>− 300</td><td>7,200</td></tr>
+        <tr><td>Examples</td><td>− 400</td><td>6,800</td></tr>
+        <tr><td>The question</td><td>− 50</td><td>6,750</td></tr>
+        <tr><td>Passages: 6,750 ÷ 700 = 9 fit</td><td>− 6,300</td><td>450 spare</td></tr>
+      </table>
+      <p>Nine of the twelve passages go in; the three lowest-ranked are dropped. Reserve the answer first: a
+        prompt that fills the window leaves the model no room to reply. Your code does this sum on every
+        request, the way a packet builder respects an MTU.</p>
+      <p>With a very large window the limit stops being "what fits" and becomes "what helps". More context costs
+        more, takes longer, and buries the useful passage. Send the few best passages, not everything you have.</p>
+
+      <h3>What makes a prompt work</h3>
+      <table>
+        <tr><th>Do</th><th>Because</th></tr>
+        <tr><td>Say exactly what you want, including length and format.</td><td>The model fills every gap with a guess.</td></tr>
+        <tr><td>Give it a way out: "if the passages don't answer, say so".</td><td>Otherwise it invents an answer.</td></tr>
+        <tr><td>Mark where each part starts and ends (headings, tags, brackets).</td><td>It must tell your rules from the pasted text.</td></tr>
+        <tr><td>Split a big task into smaller prompts.</td><td>Each one is easier to get right, test and debug.</td></tr>
+        <tr><td>Change one thing, then measure.</td><td>A prompt that fixes one case often breaks another. Only an eval shows it (chapter 17).</td></tr>
+      </table>
+      <div class="callout reliability">
+        <p><strong>Prompts are code.</strong> Keep them in files, in version control, with a version number. A
+          one-word change can move your accuracy. A prompt edited in place on a server is an untested deploy.</p>
+      </div>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow">Use it when, skip it when</p>
+      <h2>Which technique, when</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Reach for it when</h3>
+          <ul>
+            <li><strong>Few-shot:</strong> the output format keeps drifting, or the task is a judgement call you can show with cases.</li>
+            <li><strong>Chain of thought:</strong> the model gets multi-step questions wrong but each step right.</li>
+            <li><strong>A longer prompt:</strong> an eval shows a specific failure that a rule or an example fixes.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip it when</h3>
+          <ul>
+            <li><strong>Few-shot:</strong> plain instructions already pass your evals. Examples are tokens on every call.</li>
+            <li><strong>Chain of thought:</strong> the task is extraction or a lookup, or the model already has a thinking mode.</li>
+            <li><strong>Prompt tricks:</strong> the model lacks the facts. No wording fixes missing knowledge; that needs retrieval (Part 2).</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow">The tools</p>
+      <h2>Templates and where prompts live</h2>
+      <table>
+        <tr><th>Slot</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Templates</td><td>Plain string formatting · <strong>LangChain <code>ChatPromptTemplate</code> (this book)</strong> · Jinja</td><td>All do the same thing: a text with named holes. Like ERB or Go's <code>text/template</code>.</td></tr>
+        <tr><td>Storing versions</td><td><strong>Files in git (this book)</strong> · LangSmith · Langfuse</td><td>Files are enough until several people edit prompts without deploying.</td></tr>
+        <tr><td>Automatic tuning</td><td>DSPy</td><td>Searches for better prompts against your eval. Needs a good eval first.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow">In the docs assistant</p>
+      <h2>Version 2: a real prompt</h2>
+      <p>The assistant gets its template. The passages are still pasted by hand; Part 2 replaces that hand with
+        search.</p>
+      <pre class="code"><code>from langchain_core.prompts import ChatPromptTemplate
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system",
+     "You answer employees' questions about company policy.\n"
+     "Use only the passages below. If they don't contain the answer, say you don't know.\n"
+     "Name the document you used."),
+    ("human",
+     "Passages:\n{passages}\n\n"
+     "Question: {question}\n\n"
+     "Answer in one or two sentences, then the source."),
+])
+
+messages = prompt.invoke({
+    "passages": "[Leave policy] Employees get 12 weeks of paid parental leave.",
+    "question": "How long is parental leave?",
+})
+reply = llm.invoke(messages)      # llm from chapter 1</code></pre>
+      <p>Two things to notice. The rules live in the <code>system</code> message and the request is repeated at
+        the end of the <code>human</code> message: start and end, the two places the model reads best. And the
+        user's question fills a hole in a template; it never gets to rewrite the rules above it. Chapter 18
+        shows why that separation matters.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Delete the sentence "If they don't contain the answer, say you don't know"
+          and ask something the passage does not cover. Then put it back. That one sentence is the difference
+          between a guess and an honest "I don't know".</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-5" data-sections="System Prompt and User Prompt|Context Length and Context Efficiency|Prompt Engineering Best Practices|Organize and Version Prompts">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 5 · Prompt Engineering</strong>
+          <span class="ref-sections">System Prompt and User Prompt · Context Length and Context Efficiency · Prompt Engineering Best Practices · Organize and Version Prompts</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-5" data-sections="Static Content|Few-Shot Prompting|Dynamic Content">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 5 · Prompt Content</strong>
+          <span class="ref-sections">Static Content · Few-Shot Prompting · Dynamic Content</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-6" data-sections="Anatomy of the Ideal Prompt|Elastic Snippets|Putting It All Together">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 6 · Assembling the Prompt</strong>
+          <span class="ref-sections">Anatomy of the Ideal Prompt · Elastic Snippets · Putting It All Together</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-8" data-sections="Chain of Thought">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 8 · Conversational Agency</strong>
+          <span class="ref-sections">Chain of Thought</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-6" data-sections="The Basic Ingredients of a Prompt|In-Context Learning: Providing Examples|Chain Prompting: Breaking up the Problem|Chain-of-Thought: Think Before Answering">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 6 · Prompt Engineering</strong>
+          <span class="ref-sections">The Basic Ingredients of a Prompt · In-Context Learning: Providing Examples · Chain Prompting: Breaking up the Problem · Chain-of-Thought: Think Before Answering</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

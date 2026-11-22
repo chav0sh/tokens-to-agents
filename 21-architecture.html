@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The architecture, step by step · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Part 5 · Designing the system · Chapter 21</p>
+    <h1>The architecture, step by step</h1>
+    <p class="lead">Twenty chapters each added one piece. This one puts them on a single page and replays how
+      the system grew: which failure asked for each box, and what the box costs. An AI architecture is not
+      designed in one sitting. It is grown, one measured failure at a time.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow">The problem</p>
+      <h2>The finished diagram tells you nothing about the order</h2>
+      <p>Look at any "reference architecture for generative AI" and you see fifteen boxes. Teams that start by
+        building all fifteen spend months on infrastructure before they learn whether the idea works. Teams that
+        start with one box and add the next when something breaks ship in weeks, and every box they own has a
+        reason. The diagram is the same at the end. The path is the difference.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow">The picture</p>
+      <h2>Replay the build</h2>
+      <p>Step through the eight stages. Each one lights up what was added, and says which failure made it
+        necessary.</p>
+      <div class="demo wide" id="grow">
+        <div class="controls" style="grid-template-columns: max-content 1fr max-content">
+          <button type="button" class="btn" id="prev" style="padding: 0.4rem 1rem">← Back</button>
+          <input id="stage" type="range" min="0" max="7" step="1" value="0" aria-label="Stage of the build">
+          <button type="button" class="btn" id="next" style="padding: 0.4rem 1rem">Next →</button>
+        </div>
+        <div class="callout" id="stage-text" style="margin-top: 0"></div>
+        <div class="map">
+          <div class="band">
+            <h3>Indexing <small>a background job, when documents change</small></h3>
+            <ol class="steps">
+              <li class="node plain" data-stage="2"><b>Handbook</b></li>
+              <li class="node retrieval" data-stage="2"><b>Split into chunks</b></li>
+              <li class="node retrieval" data-stage="2"><b>Embed</b></li>
+              <li class="node retrieval" data-stage="2"><i>Vector database</i><b>Qdrant</b></li>
+            </ol>
+            <ol class="steps loose">
+              <li class="node retrieval" data-stage="3"><i>Keyword index</i><b>BM25</b></li>
+              <li class="node graphdb" data-stage="4"><i>Graph database</i><b>Neo4j</b><span>the org chart</span></li>
+            </ol>
+          </div>
+          <div class="band">
+            <h3>Answering <small>on every request</small></h3>
+            <ol class="steps">
+              <li class="node plain" data-stage="0"><b>Question</b></li>
+              <li class="node reliability" data-stage="6"><b>Input guard</b></li>
+              <li class="node flow" data-stage="5"><b>Route</b><span>which kind of question?</span></li>
+              <li class="fork">
+                <div class="node retrieval" data-stage="2"><b>Retrieve</b><span>search by meaning</span></div>
+                <div class="node retrieval" data-stage="3"><b>Fuse and rerank</b><span>+ keyword search</span></div>
+                <div class="node flow" data-stage="4"><b>Tools</b><span>HR lookup, graph query</span></div>
+              </li>
+              <li class="node model" data-stage="1"><b>Build the prompt</b></li>
+              <li class="node reliability" data-stage="7"><b>Cache</b></li>
+              <li class="node model" data-stage="0"><b>Model API</b></li>
+              <li class="node reliability" data-stage="6"><b>Output guard</b></li>
+              <li class="node plain" data-stage="0"><b>Answer</b></li>
+            </ol>
+          </div>
+          <div class="band">
+            <h3>Around every run</h3>
+            <ol class="steps loose">
+              <li class="node reliability" data-stage="7"><b>Evals</b><span>fixed cases, a score per change</span></li>
+              <li class="node reliability" data-stage="7"><b>Run log</b><span>tokens, time, versions, errors</span></li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow">How it works</p>
+      <h2>Every box has a reason and a price</h2>
+      <ol class="stepper from-zero wide">
+        <li><h4>One model call</h4><p><b>Why</b>Nothing failed yet. This is the idea, working in an afternoon.</p><p><b>The price</b>About 1 second and a fraction of a cent per question.</p></li>
+        <li><h4>A real prompt</h4><p><b>The failure</b>Confident answers about a company it knows nothing about.</p><p><b>The price</b>Nothing. One paragraph of text.</p></li>
+        <li><h4>Retrieval <small>chunks, embeddings, a vector index</small></h4><p><b>The failure</b>The model has never read the handbook.</p><p><b>The price</b>An indexing job and a database to keep in step with the documents. About 10 ms per question.</p></li>
+        <li><h4>Better retrieval <small>keyword search, fusion, a reranker</small></h4><p><b>The failure</b>FIN-140 answered with FIN-401. Scoreboard 11/12.</p><p><b>The price</b>A second index and a second small model, about 45 ms. Scoreboard 12/12.</p></li>
+        <li><h4>Tools and a graph</h4><p><b>The failure</b>"A director's approval": which director? "Do I have enough days left?": that is in the HR system.</p><p><b>The price</b>Integrations with other systems, and their permissions.</p></li>
+        <li><h4>A flow with a router</h4><p><b>The failure</b>The model decided 7 days cover 10. A request for a poem was answered as policy.</p><p><b>The price</b>One more model call per question, about a second, and a classifier to test.</p></li>
+        <li><h4>Input and output guards</h4><p><b>The failure</b>A reworded request leaked the prompt. A planted paragraph was repeated as policy.</p><p><b>The price</b>A few milliseconds, and some good answers blocked by mistake.</p></li>
+        <li><h4>Evals, a run log, a cache</h4><p><b>The failure</b>The same eval scored 13/14, then 14/14. The provider began rejecting a request that had worked.</p><p><b>The price</b>Model calls to run the evals, storage for logs, a cache to keep fresh.</p></li>
+      </ol>
+      <div class="callout reliability">
+        <p><strong>One correction to the replay.</strong> The diagram shows evals arriving last because they sit
+          around everything. In the real order of work they came at stage 2: the scoreboard existed before the
+          second search did, and it is what justified stages 3 to 6. Build the measuring before the improving.</p>
+      </div>
+
+      <h3>The order most teams follow</h3>
+      <p>Chip Huyen's <cite>AI Engineering</cite> describes the same growth as five steps seen across many
+        companies. They line up with the stages above:</p>
+      <ol class="steps wide">
+        <li class="node retrieval"><b>1. Enhance context</b><span>retrieval and read-only tools</span></li>
+        <li class="node reliability"><b>2. Put in guardrails</b><span>inputs and outputs</span></li>
+        <li class="node flow"><b>3. Router and gateway</b><span>several models, one entry point</span></li>
+        <li class="node reliability"><b>4. Caches</b><span>latency and cost</span></li>
+        <li class="node flow"><b>5. Agent patterns</b><span>loops and write actions</span></li>
+      </ol>
+      <p class="caption">With monitoring and orchestration running alongside all five. The order is a tendency,
+        not a rule: follow your own failures.</p>
+
+      <h3>Where it sits in an ordinary service</h3>
+      <p>Seen from outside, the AI part is one more component of a web service. Everything around it is the
+        back-end work you already do:</p>
+      <div class="map">
+        <div class="band">
+          <h3>The request path <small>seconds, streamed</small></h3>
+          <ol class="steps">
+            <li class="node plain"><b>Browser or app</b></li>
+            <li class="node plain"><b>Your API</b><span>login, rate limits, streaming</span></li>
+            <li class="node flow"><b>The answering flow</b><span>the diagram above</span></li>
+            <li class="node model"><b>Model API</b><span>outside your network</span></li>
+          </ol>
+        </div>
+        <div class="band">
+          <h3>What the flow reads and writes</h3>
+          <ol class="steps loose">
+            <li class="node retrieval"><i>Vector database</i><b>Qdrant</b><span>a rebuildable copy</span></li>
+            <li class="node graphdb"><i>Graph database</i><b>Neo4j</b><span>a rebuildable copy</span></li>
+            <li class="node flow"><b>HR system</b><span>through a tool</span></li>
+            <li class="node plain"><i>Your database</i><b>Postgres</b><span>users, conversations, run log</span></li>
+          </ol>
+        </div>
+        <div class="band">
+          <h3>In the background <small>jobs, not requests</small></h3>
+          <ol class="steps">
+            <li class="node plain"><b>Documents change</b></li>
+            <li class="node plain"><b>Job queue</b></li>
+            <li class="node retrieval"><b>Indexing job</b><span>split, embed, index</span></li>
+            <li class="node retrieval"><b>Qdrant, BM25</b></li>
+          </ol>
+          <ol class="steps">
+            <li class="node plain"><b>A change to code, prompt or model</b></li>
+            <li class="node plain"><b>CI pipeline</b></li>
+            <li class="node reliability"><b>Evals</b><span>a score before it ships</span></li>
+          </ol>
+        </div>
+      </div>
+      <div class="cards wide">
+        <div class="card flow"><h4>The answer path</h4><p>A normal request, but slow: one to several seconds. Stream the tokens to the client so the wait is visible, and set a timeout on every hop.</p></div>
+        <div class="card retrieval"><h4>Indexing</h4><p>A background job fed by a queue, like any import. Never inside the request.</p></div>
+        <div class="card reliability"><h4>Evals</h4><p>A step in CI, like tests. They cost model calls, so run the full set when prompts, retrieval or the model change.</p></div>
+        <div class="card plain"><h4>State</h4><p>Conversations and the run log go in the database you already have. The vector and graph stores hold copies that can be rebuilt.</p></div>
+        <div class="card reliability"><h4>Identity</h4><p>The user comes from your login, never from the prompt. Their ID travels into every search filter and tool call.</p></div>
+        <div class="card reliability"><h4>Secrets</h4><p>Model keys live in the environment or a secret store, on the server only. Nothing a browser can read.</p></div>
+      </div>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow">Use it when, skip it when</p>
+      <h2>How far to go</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Add the next box when</h3>
+          <ul>
+            <li>You can name the failing cases it will fix, and they are in your eval set.</li>
+            <li>The failure is common or costly enough to justify its price in the table above.</li>
+            <li>You have tried the cheaper fix first: the prompt, then the context, then the structure.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Stop when</h3>
+          <ul>
+            <li>The evals pass and the budget holds. Many useful products stop at stage 2 or 3.</li>
+            <li>The next box solves a problem you do not have yet. A graph database with no relationship questions is only a cost.</li>
+            <li>You cannot say how you would notice if the box stopped working.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow">The tools</p>
+      <h2>The whole stack of this book</h2>
+      <table>
+        <tr><th>Box</th><th>Used here</th><th>Chapter</th><th>The slot it fills</th></tr>
+        <tr><td>Model</td><td>A small hosted model, through a LangChain chat class</td><td>1, 3, 14</td><td>Any model API</td></tr>
+        <tr><td>Embeddings and reranker</td><td>fastembed (BGE small; MS MARCO MiniLM)</td><td>5, 8</td><td>Any embedding or reranking model</td></tr>
+        <tr><td>Vector search</td><td>Qdrant</td><td>6</td><td>Any vector database, or pgvector</td></tr>
+        <tr><td>Keyword search</td><td>rank-bm25</td><td>7</td><td>Elasticsearch, OpenSearch, database full-text</td></tr>
+        <tr><td>Graph</td><td>Neo4j</td><td>10, 11</td><td>Any graph database, or recursive SQL</td></tr>
+        <tr><td>Tools</td><td>Python functions with <code>@tool</code>; MCP for sharing them</td><td>12, 16</td><td>Function calling</td></tr>
+        <tr><td>Flow and memory</td><td>LangGraph with a checkpointer</td><td>13, 15, 16</td><td>Plain code, or another flow library</td></tr>
+        <tr><td>Evals, guards, logs, cache</td><td>Plain Python</td><td>17, 18, 19</td><td>Eval and tracing platforms, guardrail libraries, Redis</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow">In the docs assistant</p>
+      <h2>The files, mapped to the diagram</h2>
+      <table>
+        <tr><th>File in <code>app/</code></th><th>What it holds</th><th>Stages</th></tr>
+        <tr><td><code>handbook.md</code>, <code>org.csv</code></td><td>The data: 14 paragraphs, 10 people.</td><td></td></tr>
+        <tr><td><code>assistant.py</code></td><td>Chunking, both searches, fusion, reranking, the prompt, the model call, the scoreboard.</td><td>0 to 3</td></tr>
+        <tr><td><code>graph.py</code></td><td>The org chart in Neo4j and the graph facts.</td><td>4</td></tr>
+        <tr><td><code>agent.py</code></td><td>Tools, the agent loop, the workflow, the LangGraph graph with memory.</td><td>4, 5</td></tr>
+        <tr><td><code>reliability.py</code></td><td>The answer eval with a judge, the attacks and guards, the trace and cache.</td><td>6, 7</td></tr>
+        <tr><td><code>mcp_server.py</code>, <code>mcp_client.py</code></td><td>One tool offered over MCP.</td><td>4</td></tr>
+      </table>
+      <p>About 900 lines of Python in total. That is the whole system in this chapter's diagram, minus the web
+        service around it.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Draw this diagram for a product you use or work on. Which boxes does it
+          clearly have? For each one, guess the failure that put it there.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-10" data-sections="AI Engineering Architecture|Enhance Context|Put in Guardrails|Add Model Router and Gateway|Reduce Latency with Caches|Add Agent Patterns|Monitoring and Observability|AI Pipeline Orchestration">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 10 · AI Engineering Architecture and User Feedback</strong>
+          <span class="ref-sections">AI Engineering Architecture · Enhance Context · Put in Guardrails · Add Model Router and Gateway · Reduce Latency with Caches · Add Agent Patterns · Monitoring and Observability · AI Pipeline Orchestration</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-4" data-sections="The Anatomy of the Loop|Exploring the Complexity of the Loop">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 4 · Designing LLM Applications</strong>
+          <span class="ref-sections">The Anatomy of the Loop · Exploring the Complexity of the Loop</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>The prices in the table reuse this book's own measurements (chapters 8, 13 and 19). The service diagram is a typical layout, not something built here: the book's app has no web API, queue or CI pipeline.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+  <script>
+    // The replay: cards up to the chosen stage are lit; the ones added at that stage are outlined.
+    const STAGES_TEXT = [
+      ["Stage 0: one call", "Question in, answer out. Built in an afternoon. It answers fluently, from general knowledge, about a company it has never heard of."],
+      ["Stage 1: a real prompt", "Rules, an allowed way out (\"say you don't know\"), the shape of the answer. Free, and it stops the confident guessing. (Chapter 2)"],
+      ["Stage 2: retrieval", "The model has never read the handbook, so the handbook is split, embedded and indexed, and the best chunks go into the prompt. The scoreboard starts here: 11/12. (Chapters 4, 5, 6, 9)"],
+      ["Stage 3: better retrieval", "The one miss: FIN-140 answered with FIN-401. Keyword search finds exact codes, fusion merges the two lists, a reranker picks the winner. 12/12. (Chapters 7, 8)"],
+      ["Stage 4: tools and a graph", "Some answers are not in any document. Maria's holiday balance is in the HR system; her director is in the org chart. (Chapters 10, 11, 12)"],
+      ["Stage 5: a flow", "The model decided 7 days were enough for 10, and treated a request for a poem as a policy question. A router picks the path, and the comparison moves into code. (Chapters 13, 15, 16)"],
+      ["Stage 6: guardrails", "A reworded request leaked the system prompt; a planted paragraph was repeated as policy. Checks in code now stand on both sides of the model. (Chapter 18)"],
+      ["Stage 7: evals, a run log, a cache", "The system now changes for reasons you did not cause, so you measure it continuously and record every call. Repeated questions skip the model. (Chapters 17, 19)"],
+    ];
+    const stage = document.getElementById("stage");
+    function replay() {
+      const now = Number(stage.value);
+      document.querySelectorAll("#grow [data-stage]").forEach((card) => {
+        const at = Number(card.dataset.stage);
+        card.classList.toggle("off", at > now);
+        card.classList.toggle("new", at === now);
+      });
+      const [title, text] = STAGES_TEXT[now];
+      document.getElementById("stage-text").innerHTML = `<p><strong>${title}.</strong> ${text}</p>`;
+    }
+    stage.addEventListener("input", replay);
+    document.getElementById("prev").addEventListener("click", () => { stage.value = Math.max(0, Number(stage.value) - 1); replay(); });
+    document.getElementById("next").addEventListener("click", () => { stage.value = Math.min(7, Number(stage.value) + 1); replay(); });
+    replay();
+  </script>
+</body>
+</html>

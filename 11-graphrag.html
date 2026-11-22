@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GraphRAG · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow graphdb">Part 2 · Giving it context · Chapter 11</p>
+    <h1>GraphRAG</h1>
+    <p class="lead">GraphRAG means using a graph as a source of context for the model, next to or instead of
+      text search. The word covers several different designs. This chapter builds the simplest and most common
+      one, and maps the others.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow graphdb">The problem</p>
+      <h2>The search finds the rule. Nobody resolves it.</h2>
+      <p><em>"I'm Maria Lind. Who has to approve my expense claim of 800 euros?"</em> The assistant from chapter 8
+        retrieves the right chunk and answers:</p>
+      <div class="out-box" style="margin-top: 0; border-radius: 16px">Your expense claim of 800 euros needs a director's approval. [Expenses policy]</div>
+      <p>Faithful to the handbook, and no help. The rule speaks of a role; the person filling that role for
+        Maria is a fact about relationships, stored in the graph from chapter 10. Text search cannot produce it,
+        because no text says it.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow graphdb">The picture</p>
+      <h2>A second retriever, for facts about connections</h2>
+      <ol class="steps wide">
+        <li class="node plain"><b>Question</b></li>
+        <li class="fork">
+          <div class="node retrieval"><b>Search the text</b><span>chunks, as before</span></div>
+          <div class="node graphdb new"><b>Query the graph</b><span>who is mentioned? what is connected to them?</span></div>
+        </li>
+        <li class="node model"><b>Build the prompt</b><span>chunks + graph facts</span></li>
+        <li class="node model"><b>Model</b></li>
+        <li class="node plain"><b>Answer</b></li>
+      </ol>
+      <p class="caption">The graph is not a replacement for the search. The text gives the rule, the graph gives
+        the people; the prompt needs both.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow graphdb">How it works</p>
+      <h2>Three attempts at one question</h2>
+      <p>The steps: find the people named in the question, ask the graph about them, and add the results to the
+        prompt as passages marked <code>[Org chart]</code>. What exactly you add turns out to matter a great
+        deal. These are real answers from the same small model.</p>
+      <table>
+        <tr><th>Attempt</th><th>Graph facts added to the prompt</th><th>The model's answer</th></tr>
+        <tr><td><strong>1. No graph</strong></td><td>None.</td><td>"…needs a director's approval." <br>Right, without a name.</td></tr>
+        <tr><td><strong>2. The whole chain</strong></td><td>Maria Lind is Engineer. Their manager is Jonas Berg, Engineering Manager. 2 levels above them is Sara Holm, Director of Engineering. 3 levels above them is Erik Dahl, CEO.</td><td>"…<strong>Erik Dahl or Sara Holm</strong> would need to approve it…" <br>Wrong: the CEO is not a director, and "or" is not an answer.</td></tr>
+        <tr><td><strong>3. The resolved fact</strong></td><td>For Maria Lind, "a director" means Sara Holm (Director of Engineering).</td><td>"…Based on the org chart, 'a director' means <strong>Sara Holm</strong> (Director of Engineering)." <br>Right.</td></tr>
+      </table>
+      <p>Attempt 2 handed the model raw data and left the reasoning to it: walk up the chain, find the first
+        director. A small model did that badly. Attempt 3 let the database do the walking, with the "nearest
+        director" query from chapter 10, and phrased the result in the handbook's own words. The same phrasing
+        answered four out of four different employees' questions correctly.</p>
+      <div class="callout graphdb">
+        <p><strong>Let each part do what it is good at.</strong> Exact questions about structure belong in a
+          query: the database is never "roughly right" about who reports to whom. The model's job is to read the
+          rule, read the finished fact, and write the sentence. The less it has to work out, the less it gets
+          wrong.</p>
+      </div>
+
+      <h3>The four things people call GraphRAG</h3>
+      <table>
+        <tr><th>Design</th><th>How it works</th><th>Good for</th><th>The cost</th></tr>
+        <tr><td><strong>Graph lookup</strong> (this chapter)</td><td>Your code spots the entities in the question and runs fixed, tested queries about them.</td><td>Known kinds of question over a graph you already have.</td><td>You write one query per kind of fact.</td></tr>
+        <tr><td><strong>Text-to-Cypher</strong></td><td>The model writes the Cypher query from the question; your code runs it.</td><td>Open-ended questions over a graph.</td><td>The model can write a wrong or harmful query. Use a read-only user, validate, and expect misses.</td></tr>
+        <tr><td><strong>A knowledge graph built from documents</strong></td><td>At indexing time, a model reads every chunk and extracts entities and relationships into a graph. Retrieval then follows links between chunks.</td><td>Questions that span documents: "what else is this supplier involved in?"</td><td>A model call per chunk to build it, and the extraction makes mistakes.</td></tr>
+        <tr><td><strong>Microsoft's GraphRAG</strong></td><td>The same extraction, then the graph is clustered into communities and each community gets a written summary. Broad questions are answered from the summaries.</td><td>"What are the main themes in these 5,000 documents?", which no single chunk can answer.</td><td>The most expensive index of the four. Worth it only for those broad questions.</td></tr>
+      </table>
+      <p>When someone proposes "GraphRAG", ask which of the four they mean. They differ by an order of magnitude
+        in cost and effort.</p>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow graphdb">Use it when, skip it when</p>
+      <h2>Is a graph worth adding?</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Add a graph when</h3>
+          <ul>
+            <li>Answers depend on who or what is connected: reporting lines, ownership, dependencies, board seats.</li>
+            <li>You can point at failing questions where the right chunk was retrieved and the answer was still incomplete.</li>
+            <li>The structured data already exists somewhere: an HR system, a CRM, a config database.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip it when</h3>
+          <ul>
+            <li>The answers are in the text. Better search (chapters 5 to 9) is far cheaper.</li>
+            <li>The "graph" is one lookup: a dictionary or a SQL query gives the same fact.</li>
+            <li>You would have to build the graph from documents and have no questions that need it yet.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow graphdb">The tools</p>
+      <h2>The names in this slot</h2>
+      <table>
+        <tr><th>Design</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Graph lookup</td><td><strong>The Neo4j driver and your own queries (this book)</strong></td><td>A few queries and a function. No framework needed.</td></tr>
+        <tr><td>Text-to-Cypher</td><td>LangChain's Neo4j integration · the <code>neo4j-graphrag</code> Python package</td><td>They send the graph's schema to the model and run what it writes.</td></tr>
+        <tr><td>Graph built from documents</td><td>Microsoft GraphRAG (open source) · LlamaIndex property graph index · LightRAG</td><td>Indexing pipelines that call a model on every chunk.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow graphdb">In the docs assistant</p>
+      <h2>Graph facts become one more kind of passage</h2>
+      <pre class="code"><code>MANAGER = "MATCH (:Person {name: $name})-[:REPORTS_TO]->(boss) RETURN boss.name AS name, boss.title AS title"
+NEAREST_DIRECTOR = """
+    MATCH path = (:Person {name: $name})-[:REPORTS_TO*]->(boss:Person)
+    WHERE boss.title STARTS WITH 'Director'
+    RETURN boss.name AS name, boss.title AS title ORDER BY length(path) LIMIT 1
+"""
+
+def people_in(question: str) -> list[dict]:
+    """The employees a question mentions by name."""
+    people = query("MATCH (p:Person) RETURN p.name AS name, p.title AS title")
+    return [person for person in people if person["name"].lower() in question.lower()]
+
+def graph_facts(question: str) -> list[str]:
+    """The database answers the structural question; the fact is phrased in the policy's own words."""
+    facts = []
+    for person in people_in(question):
+        name = person["name"]
+        for boss in query(MANAGER, name=name):
+            facts.append(f'For {name}, "their manager" means {boss["name"]} ({boss["title"]}).')
+        for boss in query(NEAREST_DIRECTOR, name=name):
+            facts.append(f'For {name}, "a director" means {boss["name"]} ({boss["title"]}).')
+    return facts
+
+passages  = [f"[{chunk['doc']}] {chunk['text']}" for chunk in retrieve(question)]      # chapters 4 to 9
+passages += [f"[Org chart] {fact}" for fact in graph_facts(question)]                 # new</code></pre>
+      <p>Finding the person by looking for their name in the question is the crudest possible method, and
+        enough here. In a real system the name comes from the login, not from the text, which is also safer:
+        people should not get answers about someone else by typing a name.</p>
+      <div class="callout">
+        <p><strong>No scoreboard change.</strong> The 12 test questions are all answered from the handbook, so
+          they still score 12/12. Graph questions need their own test cases; the four used above were checked by
+          reading the answers. Chapter 17 turns that into a proper eval.</p>
+      </div>
+      <div class="callout try">
+        <p><strong>Try it.</strong> With Neo4j running and a model key set:
+          <code>uv run python app/graph.py "I'm Tom Ek. Who do I ask if I want to work from home on Fridays?"</code>
+          prints the answer three ways. Then add a rule to the handbook that mentions "the CEO" and a fact for it.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow graphdb">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="RAG Beyond Texts|RAG with tabular data">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">RAG Beyond Texts · RAG with tabular data</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li><strong>None of the three books covers GraphRAG.</strong> The nearest material is the card above, on retrieving from structured sources.</li>
+          <li>Edge et al., <cite>From Local to Global: A Graph RAG Approach to Query-Focused Summarization</cite> (Microsoft Research, 2024): the paper behind Microsoft's GraphRAG.</li>
+          <li>The three answers in the table are from runs on 2026-11-22 with <code>app/graph.py</code> (Neo4j 5.26, <code>nvidia/nemotron-3.5-lightning-30b-a3b</code>). The tools table is from general knowledge and was not checked against each project's current docs.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

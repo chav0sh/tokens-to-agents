@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Glossary · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Extras · The words</p>
+    <h1>Glossary</h1>
+    <p class="lead">Every term this book uses, in one or two lines, with the chapter that explains it. Type to
+      filter.</p>
+
+    <section>
+      <div class="demo wide">
+        <label for="filter"><strong>Filter:</strong></label>
+        <input id="filter" type="search" placeholder="for example: rerank" style="font: inherit; padding: 0.45rem 0.7rem; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); width: min(24rem, 100%)">
+      </div>
+      <table id="terms">
+        <tr><th>Term</th><th>Meaning</th><th>Ch.</th></tr>
+        <tr><td><strong>Agent</strong></td><td>A system in which the model decides, step by step, which tool to call next, in a loop.</td><td><a href="13-workflows-and-agents.html">13</a></td></tr>
+        <tr><td><strong>ANN (approximate nearest neighbour)</strong></td><td>Finding the closest vectors quickly by accepting that a few may be missed.</td><td><a href="06-vector-databases.html">6</a></td></tr>
+        <tr><td><strong>BM25</strong></td><td>The standard formula for ranking documents by the words they share with a query.</td><td><a href="07-keyword-search.html">7</a></td></tr>
+        <tr><td><strong>Chain of thought</strong></td><td>Asking the model to write its reasoning before its answer.</td><td><a href="02-prompts.html">2</a></td></tr>
+        <tr><td><strong>Checkpointer</strong></td><td>In LangGraph, the part that saves a flow's state after every step.</td><td><a href="15-langgraph.html">15</a></td></tr>
+        <tr><td><strong>Chunk</strong></td><td>A piece of a document, small enough to search and to fit in a prompt.</td><td><a href="09-chunking.html">9</a></td></tr>
+        <tr><td><strong>Context window</strong></td><td>The most tokens a model can handle in one call, prompt and answer together.</td><td><a href="01-llm-api.html">1</a></td></tr>
+        <tr><td><strong>Cosine similarity</strong></td><td>A number saying how close two embeddings point: 1 is the same direction.</td><td><a href="05-embeddings.html">5</a></td></tr>
+        <tr><td><strong>Cross-encoder</strong></td><td>A model that reads a question and a passage together and scores the pair. Used for reranking.</td><td><a href="08-hybrid-search.html">8</a></td></tr>
+        <tr><td><strong>Cypher</strong></td><td>The query language of Neo4j: you draw the pattern of nodes and relationships you want.</td><td><a href="10-graph-databases.html">10</a></td></tr>
+        <tr><td><strong>Distillation</strong></td><td>Training a small model on the outputs of a large one.</td><td><a href="20-finetuning.html">20</a></td></tr>
+        <tr><td><strong>Embedding</strong></td><td>A list of numbers that represents a text, so that similar texts get similar numbers.</td><td><a href="05-embeddings.html">5</a></td></tr>
+        <tr><td><strong>Eval</strong></td><td>A fixed set of cases and a way of scoring outputs, rerun on every change.</td><td><a href="17-evals.html">17</a></td></tr>
+        <tr><td><strong>Faithfulness (groundedness)</strong></td><td>Whether every claim in an answer is supported by the context it was given.</td><td><a href="17-evals.html">17</a></td></tr>
+        <tr><td><strong>Few-shot</strong></td><td>Putting a handful of worked examples in the prompt.</td><td><a href="02-prompts.html">2</a></td></tr>
+        <tr><td><strong>Finetuning</strong></td><td>Training an existing model further on your own examples.</td><td><a href="20-finetuning.html">20</a></td></tr>
+        <tr><td><strong>Function calling</strong></td><td>See <em>tool calling</em>.</td><td><a href="12-tool-calling.html">12</a></td></tr>
+        <tr><td><strong>Gateway</strong></td><td>One service in front of all model calls: keys, limits, fallbacks, logging.</td><td><a href="19-monitoring.html">19</a></td></tr>
+        <tr><td><strong>Graph database</strong></td><td>A database of nodes and the relationships between them, built for following connections.</td><td><a href="10-graph-databases.html">10</a></td></tr>
+        <tr><td><strong>GraphRAG</strong></td><td>Using a graph as a source of context. Covers several designs, from a fixed lookup to a graph built from documents.</td><td><a href="11-graphrag.html">11</a></td></tr>
+        <tr><td><strong>Guardrail</strong></td><td>A check around the model: on the input, on the output, or on what its tools may do.</td><td><a href="18-guardrails.html">18</a></td></tr>
+        <tr><td><strong>Evaluation-driven development</strong></td><td>Writing the eval cases and criteria before building, as test-driven development writes tests before code.</td><td><a href="17-evals.html">17</a>, <a href="24-build-plan.html">24</a></td></tr>
+        <tr><td><strong>Hallucination</strong></td><td>A fluent statement that is not supported by the facts or the context. The chapters call it an invented answer.</td><td><a href="02-prompts.html">2</a>, <a href="17-evals.html">17</a></td></tr>
+        <tr><td><strong>HNSW</strong></td><td>The index most vector databases use: a layered graph of neighbouring vectors.</td><td><a href="06-vector-databases.html">6</a></td></tr>
+        <tr><td><strong>Hybrid search</strong></td><td>Running vector search and keyword search together and merging the results.</td><td><a href="08-hybrid-search.html">8</a></td></tr>
+        <tr><td><strong>Inverted index</strong></td><td>A map from each word to the documents that contain it. The structure behind keyword search.</td><td><a href="07-keyword-search.html">7</a></td></tr>
+        <tr><td><strong>Judge (model as judge)</strong></td><td>A second model call that grades an output against a rule you wrote.</td><td><a href="17-evals.html">17</a></td></tr>
+        <tr><td><strong>LangChain</strong></td><td>A library of common interfaces over model providers and tools, with many integrations.</td><td><a href="14-langchain.html">14</a></td></tr>
+        <tr><td><strong>LangGraph</strong></td><td>A library for writing a flow as a graph of steps with saved state.</td><td><a href="15-langgraph.html">15</a></td></tr>
+        <tr><td><strong>LLM (large language model)</strong></td><td>A model that, given text, predicts the next piece of text. You use it as a service.</td><td><a href="01-llm-api.html">1</a></td></tr>
+        <tr><td><strong>LoRA</strong></td><td>Finetuning a small add-on instead of all of a model's weights.</td><td><a href="20-finetuning.html">20</a></td></tr>
+        <tr><td><strong>MCP (Model Context Protocol)</strong></td><td>An open standard for offering tools and data to AI apps from a separate server.</td><td><a href="16-memory-and-mcp.html">16</a></td></tr>
+        <tr><td><strong>Memory</strong></td><td>Whatever an app stores and puts back into the prompt so the model appears to remember.</td><td><a href="16-memory-and-mcp.html">16</a></td></tr>
+        <tr><td><strong>Payload</strong></td><td>In a vector database, the data stored next to a vector: text, title, permissions.</td><td><a href="06-vector-databases.html">6</a></td></tr>
+        <tr><td><strong>Prompt</strong></td><td>The full text sent to the model: rules, examples, context and the question.</td><td><a href="02-prompts.html">2</a></td></tr>
+        <tr><td><strong>Prompt caching</strong></td><td>A provider charging less for the unchanged beginning of a prompt.</td><td><a href="19-monitoring.html">19</a></td></tr>
+        <tr><td><strong>Prompt injection</strong></td><td>Text, typed by a user or hidden in a document, that makes the model follow someone else's instructions.</td><td><a href="18-guardrails.html">18</a></td></tr>
+        <tr><td><strong>Quantization</strong></td><td>Storing numbers with fewer bits, to save memory. Applies to vectors and to model weights.</td><td><a href="06-vector-databases.html">6</a>, <a href="20-finetuning.html">20</a></td></tr>
+        <tr><td><strong>RAG (retrieval-augmented generation)</strong></td><td>Retrieve the relevant passages, put them in the prompt, let the model answer from them.</td><td><a href="04-rag.html">4</a></td></tr>
+        <tr><td><strong>ReAct</strong></td><td>The agent loop: reason, act with a tool, observe, repeat.</td><td><a href="13-workflows-and-agents.html">13</a></td></tr>
+        <tr><td><strong>Reranker</strong></td><td>A second, slower model that sorts the candidates a search returned.</td><td><a href="08-hybrid-search.html">8</a></td></tr>
+        <tr><td><strong>Router</strong></td><td>A step that classifies a request so that code can choose the path.</td><td><a href="13-workflows-and-agents.html">13</a></td></tr>
+        <tr><td><strong>RRF (reciprocal rank fusion)</strong></td><td>Merging ranked lists by summing 1 ÷ (60 + rank).</td><td><a href="08-hybrid-search.html">8</a></td></tr>
+        <tr><td><strong>Semantic cache</strong></td><td>A cache that returns a stored answer for a question similar to an earlier one.</td><td><a href="19-monitoring.html">19</a></td></tr>
+        <tr><td><strong>Stop words</strong></td><td>Words too common to help a keyword search, removed before indexing.</td><td><a href="07-keyword-search.html">7</a></td></tr>
+        <tr><td><strong>Streaming</strong></td><td>Sending tokens to the user as they are produced.</td><td><a href="03-choosing-a-model.html">3</a></td></tr>
+        <tr><td><strong>Structured output</strong></td><td>Making the model return data that fits a schema.</td><td><a href="01-llm-api.html">1</a></td></tr>
+        <tr><td><strong>System prompt</strong></td><td>The message that carries your rules, separate from the user's message.</td><td><a href="01-llm-api.html">1</a>, <a href="02-prompts.html">2</a></td></tr>
+        <tr><td><strong>Temperature</strong></td><td>A setting for how much randomness goes into choosing each token. 0 picks the most likely.</td><td><a href="01-llm-api.html">1</a></td></tr>
+        <tr><td><strong>Token</strong></td><td>A piece of a word. The unit models read, write, limit and bill by.</td><td><a href="01-llm-api.html">1</a></td></tr>
+        <tr><td><strong>Tool calling</strong></td><td>The model replies with the name and arguments of a function; your code runs it.</td><td><a href="12-tool-calling.html">12</a></td></tr>
+        <tr><td><strong>Top-k (retrieval)</strong></td><td>How many results a search returns: <code>TOP_K</code> in the app, 3 by default.</td><td><a href="06-vector-databases.html">6</a>, <a href="08-hybrid-search.html">8</a></td></tr>
+        <tr><td><strong>Top-p, top-k (sampling)</strong></td><td>Settings that cut unlikely tokens before one is drawn.</td><td><a href="01-llm-api.html">1</a></td></tr>
+        <tr><td><strong>Trace</strong></td><td>The timeline of one request, split into its steps.</td><td><a href="19-monitoring.html">19</a></td></tr>
+        <tr><td><strong>Vector database</strong></td><td>A database that stores embeddings and finds the nearest ones fast.</td><td><a href="06-vector-databases.html">6</a></td></tr>
+        <tr><td><strong>Workflow</strong></td><td>A multi-step flow in which your code, not the model, decides the steps.</td><td><a href="13-workflows-and-agents.html">13</a></td></tr>
+        <tr><td><strong>Zero-shot</strong></td><td>A prompt with instructions and no examples.</td><td><a href="02-prompts.html">2</a></td></tr>
+      </table>
+      <p class="caption" id="count"></p>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

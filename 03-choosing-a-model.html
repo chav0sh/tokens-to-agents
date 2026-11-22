@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Choosing a model · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Part 1 · The model · Chapter 3</p>
+    <h1>Choosing a model</h1>
+    <p class="lead">There are hundreds of models and the names change every few months. The decision underneath
+      does not: three trade-offs, one hosting question, and a test on your own data.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow">The problem</p>
+      <h2>The leaderboard does not know your task</h2>
+      <p>Public rankings measure general ability on public test sets. Your app needs one narrow thing done well,
+        within a budget and a response time. The top model on a leaderboard is often ten times the price and
+        several times slower than a model that passes your cases just as well. And the model you pick today will
+        be replaced: by a cheaper one, a better one, or because the provider retires it.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow">The picture</p>
+      <h2>Filter, shortlist, test, watch</h2>
+      <figure class="canvas" aria-label="Decide whether data may leave your network, shortlist two or three models, run your own evals, fix the prompt and context before moving up a size">
+        <script type="application/json">{"cols": 4, "nodes": [
+          {"id": "a", "col": 1, "row": 1, "icon": "lock", "title": "Can the data leave your network?", "kind": "plain", "shape": "gate"},
+          {"id": "api", "col": 2, "row": 1, "icon": "gateway", "title": "Hosted API", "kind": "model"},
+          {"id": "s", "col": 3, "row": 1, "icon": "search", "title": "Shortlist 2 or 3 models", "kind": "model", "sub": "start small and cheap"},
+          {"id": "ev", "col": 4, "row": 1, "icon": "eval", "title": "Run your own evals", "kind": "reliability", "sub": "quality, cost, latency"},
+          {"id": "sh", "col": 2, "row": 2, "icon": "code", "title": "Self-host an open model", "kind": "model"},
+          {"id": "g", "col": 4, "row": 2, "icon": "gate", "title": "Good enough?", "kind": "reliability", "shape": "gate"},
+          {"id": "up", "col": 2, "row": 3, "icon": "spark", "title": "Move up a model size", "kind": "model", "sub": "then evaluate again"},
+          {"id": "fix", "col": 3, "row": 3, "icon": "doc", "title": "Fix the prompt and the context first", "kind": "model"},
+          {"id": "ship", "col": 4, "row": 3, "icon": "check", "title": "Ship it", "kind": "plain", "sub": "and keep measuring", "shape": "end"}
+        ], "edges": [{"from": "a", "to": "api", "label": "yes"}, {"from": "a", "to": "sh", "label": "no", "via": "down"}, {"from": "api", "to": "s"}, {"from": "sh", "to": "s"}, {"from": "s", "to": "ev"}, {"from": "ev", "to": "g"}, {"from": "g", "to": "ship", "label": "yes"}, {"from": "g", "to": "fix", "label": "no", "via": "down"}, {"from": "fix", "to": "ev", "type": "alt"}, {"from": "fix", "to": "up", "label": "still failing", "type": "alt"}]}</script>
+      </figure>
+      <p class="caption">Hard limits (privacy, licence, where it may run) remove options first. Public benchmarks
+        only build the shortlist. Your own evals make the decision.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow">How it works</p>
+      <h2>Three dials and some arithmetic</h2>
+
+      <h3>Quality, cost, latency: pick two and a half</h3>
+      <table>
+        <tr><th>Tier</th><th>Good at</th><th>Price</th><th>Speed</th><th>Typical job</th></tr>
+        <tr><td><strong>Small, fast</strong></td><td>Clear, bounded tasks with good context</td><td>Lowest</td><td>Fastest</td><td>Classify, extract, answer from retrieved passages, route</td></tr>
+        <tr><td><strong>Large</strong></td><td>Ambiguous input, long documents, careful writing</td><td>Often 10× or more</td><td>Slower</td><td>Hard questions, drafting, the step a small model fails</td></tr>
+        <tr><td><strong>Reasoning</strong></td><td>Multi-step problems, planning</td><td>Highest: the thinking is billed as output</td><td>Slowest</td><td>Planning an agent's steps, analysis</td></tr>
+      </table>
+      <p>Every provider sells these three tiers under its own names. Learn the tiers, look up the names when you
+        need them.</p>
+
+      <h3>Cost, worked</h3>
+      <p>One request: 1,200 prompt tokens, a 150-token answer. With example prices per million tokens:</p>
+      <table>
+        <tr><th></th><th>Price in / out</th><th>One request</th><th>10,000 a day</th></tr>
+        <tr><td>Small model</td><td>$0.30 / $2.50</td><td>$0.000735</td><td>$7.35</td></tr>
+        <tr><td>Large model</td><td>$3.00 / $15.00</td><td>$0.005850</td><td>$58.50</td></tr>
+      </table>
+      <p class="caption">Made-up prices in a realistic ratio. The gap is the point: about 8× for the same request.</p>
+
+      <h3>Latency, worked</h3>
+      <p>Two numbers describe speed. <strong>Time to first token</strong> is the wait before anything appears.
+        <strong>Tokens per second</strong> is how fast the answer then arrives. For the same 150-token answer:</p>
+      <table>
+        <tr><th></th><th>First token</th><th>Speed</th><th>Full answer</th></tr>
+        <tr><td>Small model</td><td>0.4 s</td><td>100 tokens/s</td><td>0.4 + 150 ÷ 100 = <strong>1.9 s</strong></td></tr>
+        <tr><td>Large model</td><td>0.8 s</td><td>40 tokens/s</td><td>0.8 + 150 ÷ 40 = <strong>4.55 s</strong></td></tr>
+      </table>
+      <p>Two levers follow. <strong>Streaming</strong> shows tokens as they arrive, so the user waits for the
+        first token, not the last. And a <strong>shorter answer</strong> is a faster answer: the output length
+        sets most of the time.</p>
+
+      <h3>Hosted API or your own servers</h3>
+      <table>
+        <tr><th></th><th>Hosted API</th><th>Self-hosted open model</th></tr>
+        <tr><td><strong>To start</strong></td><td>An API key and a few lines</td><td>GPUs, a serving stack, someone to run them</td></tr>
+        <tr><td><strong>Your data</strong></td><td>Leaves your network; read the provider's terms</td><td>Stays with you</td></tr>
+        <tr><td><strong>Best available quality</strong></td><td>Usually the strongest models</td><td>Good, usually a step behind</td></tr>
+        <tr><td><strong>Cost shape</strong></td><td>Per token: cheap at low volume</td><td>Per GPU-hour: pays off only at steady high volume</td></tr>
+        <tr><td><strong>Control</strong></td><td>The provider can change, limit or retire the model</td><td>You pin the version, and can finetune it</td></tr>
+      </table>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow">Use it when, skip it when</p>
+      <h2>Where to start</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Start with a small hosted model when</h3>
+          <ul>
+            <li>You are building the first version of anything.</li>
+            <li>The task is bounded and you give the model good context.</li>
+            <li>Volume is unknown or modest.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Leave that default only when</h3>
+          <ul>
+            <li>Evals still fail after the prompt and the context are fixed: move up a tier.</li>
+            <li>Law or policy says the data cannot leave: self-host.</li>
+            <li>Steady, very high volume makes GPUs cheaper than tokens: self-host.</li>
+            <li>It must run offline or on a device: a small open model.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout">
+        <p><strong>Most quality problems are not model problems.</strong> A weak answer usually means the model
+          was missing a fact or an instruction. Fix what you send before you pay for a bigger model.</p>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow">The tools</p>
+      <h2>The names in this slot</h2>
+      <table>
+        <tr><th>Slot</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Proprietary models</td><td>GPT (OpenAI), Claude (Anthropic), Gemini (Google)</td><td>API only. Each family has small, large and reasoning tiers.</td></tr>
+        <tr><td>Open-weight models</td><td>Llama (Meta), Mistral, Qwen, Gemma (Google), Nemotron (NVIDIA)</td><td>Download and run, or use through a host. Check the licence.</td></tr>
+        <tr><td>Serving your own</td><td>Ollama (laptop), vLLM (servers), llama.cpp</td><td>They expose the same kind of chat API, so your code barely changes.</td></tr>
+        <tr><td>One API over many</td><td>LiteLLM, OpenRouter · <strong>LangChain chat models (this book)</strong></td><td>Switch provider by configuration. Add fallbacks.</td></tr>
+        <tr><td>Comparing</td><td>LMArena, Artificial Analysis</td><td>Quality, price and speed side by side. Use them for the shortlist only.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow">In the docs assistant</p>
+      <h2>One small model, behind one function</h2>
+      <p>The assistant answers from passages it is given, which is a bounded task: a small, fast hosted model.
+        The choice lives in exactly one place, so the model can be swapped without touching the rest of the app.
+        It is the same idea as hiding a payment provider behind an interface.</p>
+      <pre class="code"><code>import os
+from langchain_core.language_models import BaseChatModel
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
+def get_llm() -> BaseChatModel:
+    """The one place the chat model is created. Swap models here and nowhere else."""
+    model = os.environ["LLM_MODEL"]   # the model name is configuration, not code
+    if os.environ.get("LLM_PROVIDER") == "nvidia":
+        return ChatNVIDIA(model=model, temperature=0, max_completion_tokens=512, timeout=60)
+    return ChatGoogleGenerativeAI(model=model, temperature=0, timeout=60)</code></pre>
+      <p>Because every chat model has the same <code>invoke</code>, the rest of the code does not know which
+        company answers. When a model is retired, or a cheaper one appears, you change one environment variable,
+        rerun the evals, and compare the scores.</p>
+      <div class="callout reliability">
+        <p><strong>Pin the exact model version</strong> where the provider lets you, and treat a model change
+          like a dependency upgrade: run the evals before it reaches users.</p>
+      </div>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Take your provider's price page and work out what 10,000 requests a day
+          would cost on its smallest and its largest model, using the sum from chapter 1.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-4" data-sections="Model Selection Workflow|Model Build Versus Buy|Navigate Public Benchmarks">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 4 · Evaluate AI Systems</strong>
+          <span class="ref-sections">Model Selection Workflow · Model Build Versus Buy · Navigate Public Benchmarks</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-9" data-sections="Inference Performance Metrics">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 9 · Inference Optimization</strong>
+          <span class="ref-sections">Inference Performance Metrics</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-1" data-sections="Proprietary, Private Models|Open Models">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 1 · An Introduction to Large Language Models</strong>
+          <span class="ref-sections">Proprietary, Private Models · Open Models</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-7" data-sections="Choosing the Model">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 7 · Taming the Model</strong>
+          <span class="ref-sections">Choosing the Model</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

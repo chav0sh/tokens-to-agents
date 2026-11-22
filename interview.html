@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Interview questions · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Extras · Job interviews</p>
+    <h1>AI engineer interview questions</h1>
+    <p class="lead">Twenty-one questions that come up again and again in interviews for AI engineering roles, answered
+      with what this book taught. Read the question, answer it out loud, then open the card and compare. Each answer
+      links the chapter to reread.</p>
+
+    <section>
+      <h2>How to answer any concept question</h2>
+      <p>Interviewers are not checking that you memorised a definition. They want to hear that you know how it works,
+        when it is the wrong tool, and that you have measured something. Four moves, in this order, fit most
+        questions in under two minutes:</p>
+      <figure class="canvas" aria-label="Four moves: define it in one sentence, say how it works, give the trade-off and when not to use it, then a number or an example from your own work">
+        <script type="application/json">{"cols": 4, "nodes": [
+          {"id": "a", "col": 1, "row": 1, "icon": "doc", "title": "1 · Define it", "sub": "one sentence, plain words", "kind": "model"},
+          {"id": "b", "col": 2, "row": 1, "icon": "code", "title": "2 · How it works", "sub": "the mechanism, in steps", "kind": "retrieval"},
+          {"id": "c", "col": 3, "row": 1, "icon": "gate", "title": "3 · The trade-off", "sub": "when to use it, when not", "kind": "flow"},
+          {"id": "d", "col": 4, "row": 1, "icon": "eval", "title": "4 · A number", "sub": "what you measured, or would", "kind": "reliability", "shape": "end"}
+        ], "edges": [{"from": "a", "to": "b"}, {"from": "b", "to": "c"}, {"from": "c", "to": "d"}]}</script>
+      </figure>
+      <p class="caption">Move 3 is where most candidates stop short. "It depends" is only an answer when you say on
+        what. Move 4 is what separates someone who has built it from someone who has read about it: this book's
+        scoreboard and logs give you real numbers to quote.</p>
+    </section>
+
+    <section>
+      <h2>The questions</h2>
+      <div class="demo wide">
+        <label for="filter"><strong>Filter:</strong></label>
+        <input id="filter" type="search" placeholder="for example: rag" style="font: inherit; padding: 0.45rem 0.7rem; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); width: min(24rem, 100%)">
+      </div>
+      <p class="caption" id="count"></p>
+
+      <div id="terms" data-noun="questions">
+      <h3>The model and its prompt</h3>
+      <div class="qa-list">
+        <details class="qa model"><summary><span class="qa-n">Q1</span><strong>What happens when you call an LLM API?</strong><em>Ch. 1</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you see a model as a next-token loop with a bill, not as a database that knows things.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>The prompt is split into tokens, pieces of words, and the model scores every possible next token.</li>
+              <li>One token is drawn from those scores, added to the text, and the loop repeats until a stop token or the length limit.</li>
+              <li>Prompt and answer share one context window, and you pay per token in and out, so long answers are slow and costly.</li>
+              <li>The API is stateless: a "conversation" is your code sending the history again on every call.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"Why is a 150-token answer slower than a 10-token one?" Each token is one more trip round the loop.</dd>
+            <dt class="avoid">Avoid</dt><dd>"The model looks the answer up." It continues text; facts it was not given are guesses.</dd>
+            <dt>Learn it</dt><dd><a href="01-llm-api.html">Chapter 1</a></dd>
+          </dl></div></details>
+
+        <details class="qa model"><summary><span class="qa-n">Q2</span><strong>What do temperature and top-p do, and what would you set them to?</strong><em>Ch. 1</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you know why the same prompt gives different answers, and how to make a test repeatable.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>Temperature divides the scores before they become probabilities: low sharpens the favourite, high flattens the field; at 0 the model takes the top token.</li>
+              <li>Top-p keeps the smallest set of tokens whose probabilities add up to p and drops the unlikely tail.</li>
+              <li>Temperature 0 for extraction, classification and evals; higher for writing and ideas; top-p around 0.9 to 0.95, or the default.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"Is temperature 0 fully repeatable?" Not guaranteed: chapter 17 reran the same eval and got different results.</dd>
+            <dt class="avoid">Avoid</dt><dd>Treating temperature as a quality knob. It changes variety, not knowledge.</dd>
+            <dt>Learn it</dt><dd><a href="01-llm-api.html">Chapter 1</a>, <a href="17-evals.html">chapter 17</a></dd>
+          </dl></div></details>
+
+        <details class="qa model"><summary><span class="qa-n">Q3</span><strong>How do you structure a production prompt?</strong><em>Ch. 2</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That a prompt is a document your code assembles and versions, not a sentence typed once.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>Fixed parts first: instructions (role, rules, the way out), then examples; then the parts that change per request: the retrieved context and the question; then a short refocus.</li>
+              <li>Order matters: models use the start and the end of a prompt best, so rules go first and are repeated last.</li>
+              <li>Say exactly what you want, including length and format; mark where each part starts and ends; give a way out: "if the passages don't answer, say so".</li>
+              <li>Prompts are code: files, version control, a version number, and an eval run on every change.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"A prompt change fixed one case and broke another. How would you have known?" Only an eval shows it.</dd>
+            <dt class="avoid">Avoid</dt><dd>Editing a prompt in place on a server.</dd>
+            <dt>Learn it</dt><dd><a href="02-prompts.html">Chapter 2</a></dd>
+          </dl></div></details>
+
+        <details class="qa model"><summary><span class="qa-n">Q4</span><strong>How do you choose a model for a task?</strong><em>Ch. 3</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you decide with your own data and three dials, not with a leaderboard.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>Hard limits first: may the data leave your network, licence, where it may run. That decides hosted API or self-hosted.</li>
+              <li>Shortlist two or three, starting small and cheap; public benchmarks only build the shortlist.</li>
+              <li>Run your own evals on quality, cost and latency; you can pick two and a half of the three.</li>
+              <li>If it is not good enough, fix the prompt and the context first; move up a model size last. Keep the model behind one function so it is a one-line change.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"Where does the time go in a call?" Time to the first token plus tokens out divided by speed.</dd>
+            <dt class="avoid">Avoid</dt><dd>"I'd use the top model on the leaderboard." It does not know your task, and it is often ten times the price.</dd>
+            <dt>Learn it</dt><dd><a href="03-choosing-a-model.html">Chapter 3</a></dd>
+          </dl></div></details>
+      </div>
+
+      <h3>Giving the model context</h3>
+      <div class="qa-list">
+        <details class="qa retrieval"><summary><span class="qa-n">Q5</span><strong>What is RAG, and when would you not use it?</strong><em>Ch. 4</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you know the two pipelines and that retrieval, not the model, is where RAG usually fails.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>Retrieval-augmented generation: find the passages that answer the question, put them in the prompt, and let the model write an answer that cites them.</li>
+              <li>Two pipelines: indexing (split, embed, store) when documents change; answering (retrieve, augment, generate) on every question.</li>
+              <li>Use it when the facts are in your documents and change. Skip it when everything fits comfortably in the prompt, when the answer is a number from a database (a query or a tool), or when the task needs no outside facts.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"An answer is wrong. Where do you look first?" Print the retrieved chunks. If the answer is not in them, no prompt will save it.</dd>
+            <dt class="avoid">Avoid</dt><dd>Blaming the model before checking retrieval.</dd>
+            <dt>Learn it</dt><dd><a href="04-rag.html">Chapter 4</a></dd>
+          </dl></div></details>
+
+        <details class="qa retrieval"><summary><span class="qa-n">Q6</span><strong>What is an embedding, and what does a similarity score tell you?</strong><em>Ch. 5</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you can explain search by meaning, and that you do not trust a score threshold blindly.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>An embedding is a list of numbers that represents a text, so that similar meanings get nearby numbers; "time off for a new baby" lands near "parental leave" with no shared word.</li>
+              <li>Cosine similarity compares two embeddings: 1 means the same direction.</li>
+              <li>Read the order, not the number: in this book unrelated chunks scored up to 0.59, tying with the right one. A score means different things for different models.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"Where do embeddings fail?" Exact codes and names: FIN-140 and FIN-401 look like twins.</dd>
+            <dt class="avoid">Avoid</dt><dd>A fixed cut-off like 0.7 without measuring it on your own data.</dd>
+            <dt>Learn it</dt><dd><a href="05-embeddings.html">Chapter 5</a></dd>
+          </dl></div></details>
+
+        <details class="qa retrieval"><summary><span class="qa-n">Q7</span><strong>Vector search or keyword search? Why do teams use both?</strong><em>Ch. 7, 8</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you know each search's blind spot, and that you add stages because an eval asked for them.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>Keyword search (BM25 over an inverted index) wins on exact terms: codes, names, rare words. Vector search wins on paraphrases.</li>
+              <li>Hybrid runs both and merges the lists, usually with reciprocal rank fusion, which needs only ranks, not comparable scores.</li>
+              <li>A reranker then reads the question and each candidate together and orders them: retrieve wide, rerank narrow.</li>
+              <li>On this book's twelve questions: keyword 7, vector 11, fused 8, fused and reranked 12.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"Fusion scored lower than vector alone. Why keep it?" It puts the right chunk among the candidates; the reranker then picks it.</dd>
+            <dt class="avoid">Avoid</dt><dd>Adding hybrid and reranking with no eval. Every stage is more code, latency and tuning.</dd>
+            <dt>Learn it</dt><dd><a href="07-keyword-search.html">Chapter 7</a>, <a href="08-hybrid-search.html">chapter 8</a></dd>
+          </dl></div></details>
+
+        <details class="qa retrieval"><summary><span class="qa-n">Q8</span><strong>How do you chunk documents?</strong><em>Ch. 9</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you see the trade-off and tune it with a measurement.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>Smaller chunks search sharper but may lose the surrounding sentences; larger ones carry context but blur several topics into one vector, and fewer fit in the prompt.</li>
+              <li>Split by the document's own structure where it has one (headings, sections), and store labels next to the text: source, title, date.</li>
+              <li>A few hundred tokens is a common start; change it and rerun the scoreboard. Re-index when documents change.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"How many chunks is a 200-page handbook?" About 133,000 tokens: 400-token chunks with a 50-token overlap make about 381 chunks, and three of them, 1,200 tokens, go into each prompt.</dd>
+            <dt class="avoid">Avoid</dt><dd>"There is a best chunk size." It depends on your documents and questions.</dd>
+            <dt>Learn it</dt><dd><a href="09-chunking.html">Chapter 9</a></dd>
+          </dl></div></details>
+
+        <details class="qa graphdb"><summary><span class="qa-n">Q9</span><strong>When would you add a graph database or GraphRAG?</strong><em>Ch. 10, 11</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you can tell a question about connections from a question about text.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>When the answer depends on who or what is connected to what, several hops away: "who approves my expenses?" needs the org chart, not a passage.</li>
+              <li>A graph stores nodes and relationships, and following a connection is cheap; Cypher lets you draw the pattern you want.</li>
+              <li>GraphRAG means several things; the simplest is a fixed graph lookup whose result goes into the prompt as one more passage.</li>
+              <li>Skip it when the answers are in the text, or one SQL join would do.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"Could SQL do it?" Yes, with a recursive query; a graph pays off when the walks get deep or varied.</dd>
+            <dt class="avoid">Avoid</dt><dd>Building a knowledge graph from all documents before you have a question that needs it.</dd>
+            <dt>Learn it</dt><dd><a href="10-graph-databases.html">Chapter 10</a>, <a href="11-graphrag.html">chapter 11</a></dd>
+          </dl></div></details>
+      </div>
+
+      <h3>Building the flow</h3>
+      <div class="qa-list">
+        <details class="qa flow"><summary><span class="qa-n">Q10</span><strong>How does tool calling work, and how do you make tools safe?</strong><em>Ch. 12</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That the model only asks, your code acts, and tool input is untrusted.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>You give the model a function's name, description and argument schema; it replies with a name and arguments; your code runs the function and sends the result back.</li>
+              <li>Few tools, few simple arguments; say when to use each and what the arguments look like.</li>
+              <li>Return readable errors ("No employee called 'Maria'") so the model can correct itself.</li>
+              <li>Validate arguments and check permissions inside the function: they come from a model reading user text.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"When is a tool the wrong choice?" When you always need the lookup: call it in code.</dd>
+            <dt class="avoid">Avoid</dt><dd>Letting the model's arguments reach a database without checks.</dd>
+            <dt>Learn it</dt><dd><a href="12-tool-calling.html">Chapter 12</a></dd>
+          </dl></div></details>
+
+        <details class="qa flow"><summary><span class="qa-n">Q11</span><strong>Workflow or agent: how do you decide?</strong><em>Ch. 13</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>The most important design choice in an AI system, and whether you default to the simpler one.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>In a workflow your code decides the steps; in an agent the model decides, in a loop.</li>
+              <li>Use a workflow when you can draw the steps, when cost and behaviour must be predictable, and when some rules must not be skipped. Most business tasks qualify.</li>
+              <li>Reach for an agent when the steps cannot be known in advance and a wrong step is cheap to notice and undo.</li>
+              <li>An agent always needs a ceiling: a maximum number of steps, a time limit, a spending limit; write actions behind a confirmation.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"How do you test a router?" As a classifier, with its own labelled questions: in this book a bare prompt sorted 5 or 6 of 8 right, and defining each kind with three examples made it 7 of 8.</dd>
+            <dt class="avoid">Avoid</dt><dd>"Agents are the future, so I'd build an agent."</dd>
+            <dt>Learn it</dt><dd><a href="13-workflows-and-agents.html">Chapter 13</a></dd>
+          </dl></div></details>
+
+        <details class="qa flow"><summary><span class="qa-n">Q12</span><strong>Why use LangGraph or LangChain instead of plain code?</strong><em>Ch. 14, 15</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you can name what a framework buys and what it costs.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>LangChain gives one interface per kind of part, so switching providers or vector stores is a small change; take the interfaces, be careful with deep abstractions.</li>
+              <li>LangGraph models a flow as state, nodes and edges. It earns its place when the flow has to wait or retry: a checkpointer saves the state after every step, so a run can pause for a person and resume, and loops are just edges.</li>
+              <li>For a straight path, a plain function is easier to read and debug.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"What does a node return?" Only the keys it changed; the graph merges them into the state.</dd>
+            <dt class="avoid">Avoid</dt><dd>Starting with a framework before you know your flow.</dd>
+            <dt>Learn it</dt><dd><a href="14-langchain.html">Chapter 14</a>, <a href="15-langgraph.html">chapter 15</a></dd>
+          </dl></div></details>
+
+        <details class="qa flow"><summary><span class="qa-n">Q13</span><strong>How does conversation memory work, and what is MCP?</strong><em>Ch. 16</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That memory is state you send again, and MCP is a plug, not intelligence.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>The model forgets between calls; memory is your code storing the conversation under an ID and sending the relevant part again.</li>
+              <li>History grows, and the window and the bill grow with it, so keep the last turns or a summary.</li>
+              <li>MCP, the Model Context Protocol, is an open standard from late 2024: a server offers tools, data and prompts; a client in your app discovers and calls them. It does for AI tools what the Language Server Protocol did for editors.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"Does MCP make tools safe?" No: the same rules apply inside each tool.</dd>
+            <dt class="avoid">Avoid</dt><dd>"The model remembers the user."</dd>
+            <dt>Learn it</dt><dd><a href="16-memory-and-mcp.html">Chapter 16</a></dd>
+          </dl></div></details>
+      </div>
+
+      <h3>Keeping it reliable</h3>
+      <div class="qa-list">
+        <details class="qa reliability"><summary><span class="qa-n">Q14</span><strong>How do you evaluate an LLM application?</strong><em>Ch. 17</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>The skill that separates AI engineering from prompt tinkering.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>A fixed set of cases with what a good output looks like, run on every change, giving one score: a test suite whose result moves.</li>
+              <li>Test each part, then the whole: did retrieval find the chunk, did the router pick the branch, is the final answer right.</li>
+              <li>Three graders: code checks (free, exact, narrow), a model as judge (understands meaning, costs a call, can be wrong), a person (the ground truth, slow).</li>
+              <li>Cases come from real questions, past failures and questions the documents cannot answer.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"How many cases?" Start with ten real inputs and the outputs you would accept, before the first prompt change; add every failure you find.</dd>
+            <dt class="avoid">Avoid</dt><dd>"I tried it and it worked."</dd>
+            <dt>Learn it</dt><dd><a href="17-evals.html">Chapter 17</a></dd>
+          </dl></div></details>
+
+        <details class="qa reliability"><summary><span class="qa-n">Q15</span><strong>Can you trust an LLM as a judge?</strong><em>Ch. 17</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you test the judge before you trust it.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>A judge is a prompt, so it gets its own cases: answers you know are wrong, planted to see if it catches them.</li>
+              <li>One criterion per judge, a yes-or-no verdict instead of a 1-to-10 score, and the reason written before the verdict.</li>
+              <li>Use code checks for what code can check; use the judge for meaning, like "is every claim supported by the passages?"</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"Your two graders disagree. Which do you believe?" Neither by default: in this book both scored 13 of 14 but failed different cases. Read the cases where they differ.</dd>
+            <dt class="avoid">Avoid</dt><dd>A single "rate this answer 1 to 10" judge.</dd>
+            <dt>Learn it</dt><dd><a href="17-evals.html">Chapter 17</a></dd>
+          </dl></div></details>
+
+        <details class="qa reliability"><summary><span class="qa-n">Q16</span><strong>How do you defend against prompt injection?</strong><em>Ch. 18</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you know a prompt cannot be the security boundary.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>The root cause: instructions and data arrive in the same channel, so text in a document or a message can act as an instruction.</li>
+              <li>Layers, strongest first: least privilege for tools; a person confirms write actions; control what gets indexed; an output guard in code; an input guard.</li>
+              <li>The first layers limit the damage even when an attack gets through; the guards catch what slipped past.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"What is indirect injection?" Instructions planted in content the system retrieves, such as a wiki page anyone can edit.</dd>
+            <dt class="avoid">Avoid</dt><dd>"I tell the model to ignore malicious instructions."</dd>
+            <dt>Learn it</dt><dd><a href="18-guardrails.html">Chapter 18</a></dd>
+          </dl></div></details>
+
+        <details class="qa reliability"><summary><span class="qa-n">Q17</span><strong>How do you reduce hallucinations?</strong><em>Ch. 2, 4, 17, 18</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you treat it as several fixable causes, not one mysterious flaw.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>Give the facts: retrieval or a tool, and check that the right chunk was retrieved.</li>
+              <li>Give a way out in the prompt: "if the passages don't answer, say so", and "use only the passages".</li>
+              <li>Check after: code verifies the cited source was among the passages; a judge checks every claim is supported.</li>
+              <li>Measure it with cases the documents cannot answer, where the right output is "I don't know".</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"Will a bigger model fix it?" Not when the fact was never in the prompt.</dd>
+            <dt class="avoid">Avoid</dt><dd>"Set temperature to 0." It makes the guess repeatable, not true.</dd>
+            <dt>Learn it</dt><dd><a href="02-prompts.html">Chapter 2</a>, <a href="04-rag.html">4</a>, <a href="17-evals.html">17</a>, <a href="18-guardrails.html">18</a></dd>
+          </dl></div></details>
+
+        <details class="qa reliability"><summary><span class="qa-n">Q18</span><strong>What do you monitor in production, and how do you cut cost and latency?</strong><em>Ch. 19</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you measure before you optimise, and know where the money goes.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>Log every model call: tokens in and out (thinking tokens are billed as output), duration and time to first token, model and exact version, prompt version, errors and retries, and a request ID that joins the steps into one trace.</li>
+              <li>In this book, about 95% of the time was the model call; retrieval was about 50 ms. So speed up the model part: fewer calls, shorter outputs, streaming, a smaller model where evals allow.</li>
+              <li>Three caches: exact (same question; clear it on re-index), semantic (similar question; can answer the wrong one), and the provider's prompt caching (a repeated prefix; no correctness risk).</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"Is logging full prompts a problem?" They are user data: decide who can read them and for how long.</dd>
+            <dt class="avoid">Avoid</dt><dd>Optimising retrieval before measuring where the time goes.</dd>
+            <dt>Learn it</dt><dd><a href="19-monitoring.html">Chapter 19</a></dd>
+          </dl></div></details>
+
+        <details class="qa model"><summary><span class="qa-n">Q19</span><strong>When would you finetune a model?</strong><em>Ch. 20</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That finetuning is the last thing to try, and you know form from facts.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>First ask: missing facts, or wrong behaviour? Missing or changing facts go to retrieval or a tool: an index updates in minutes.</li>
+              <li>Wrong behaviour goes to a better prompt, examples and smaller steps, measured by evals.</li>
+              <li>Finetune when a strict format or style will not hold, a narrow high-volume task could run on a much smaller model, or the prompt has grown huge with examples; with hundreds of good examples, a stable task and an eval.</li>
+              <li>LoRA trains a small add-on instead of all the weights, which makes it much cheaper.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"What does it cost after training?" A better base model will come; your finetune does not move to it.</dd>
+            <dt class="avoid">Avoid</dt><dd>"We'll finetune it on our documents so it knows them."</dd>
+            <dt>Learn it</dt><dd><a href="20-finetuning.html">Chapter 20</a></dd>
+          </dl></div></details>
+      </div>
+
+      <h3>Designing the system</h3>
+      <div class="qa-list">
+        <details class="qa flow"><summary><span class="qa-n">Q20</span><strong>Walk me through how you would build a question-answering assistant over company documents.</strong><em>Ch. 21, 22, 24</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you start small, measure, and add parts in order, not draw the finished diagram first.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>Start from the problem: who asks what, and should this be an AI feature at all; facts that live in systems stay in code. Do the budget sum: time and cost per question, at your volume.</li>
+              <li>Ten cases first: real questions and the answers you would accept. Then one call, a prompt, a model and a score.</li>
+              <li>Add the facts (retrieval, or a lookup) and score again; then fix the worst failure, one change at a time, keeping or undoing each.</li>
+              <li>Add checks and a log of tokens, time and errors; then three real users, whose questions become new cases.</li>
+              <li>Parts are added only when a failure asks for them: usually context first, then guardrails, then routing, caching and agent logic.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"What would you not build in version one?" An agent, a semantic cache, finetuning, a graph: each waits for a measured need.</dd>
+            <dt class="avoid">Avoid</dt><dd>Opening with the tools ("I'd use LangChain and Pinecone") instead of the problem.</dd>
+            <dt>Learn it</dt><dd><a href="21-architecture.html">Chapter 21</a>, <a href="22-design-method.html">22</a>, <a href="24-build-plan.html">24</a>; system design in depth: the companion book <cite>Prototype to Production</cite></dd>
+          </dl></div></details>
+
+        <details class="qa reliability"><summary><span class="qa-n">Q21</span><strong>What is evaluation-driven development?</strong><em>Ch. 17, 24</em></summary>
+          <div class="qa-body"><dl>
+            <dt>They check</dt><dd>That you know the term, and that you work this way, not only that you can define it.</dd>
+            <dt>Answer</dt><dd><ol>
+              <li>Decide how the application will be judged before you build it: the cases, what a good output looks like, and the other criteria such as cost and latency. The name, from Huyen's <cite>AI Engineering</cite>, comes from test-driven development.</li>
+              <li>In practice: ten real inputs with the answers you would accept, and a score, before the first prompt; then every change is kept or undone by that score.</li>
+              <li>It changes what you build: <cite>AI Engineering</cite> notes that the applications most common in production are the ones with clear evaluation criteria.</li>
+            </ol></dd>
+            <dt>Follow-up</dt><dd>"What if the output is open-ended?" Code checks for what can be checked, a tested judge for meaning, and people on a sample.</dd>
+            <dt class="avoid">Avoid</dt><dd>"We add evals once the product works." By then nobody can say whether it works.</dd>
+            <dt>Learn it</dt><dd><a href="17-evals.html">Chapter 17</a>, <a href="24-build-plan.html">24</a></dd>
+          </dl></div></details>
+      </div>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

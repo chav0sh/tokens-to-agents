@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The LLM as an API · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Part 1 · The model · Chapter 1</p>
+    <h1>The LLM as an API</h1>
+    <p class="lead">A large language model (LLM) is a service you send text to and get text back from. This
+      chapter is what a back-end developer needs to know about that one call: what goes in, what comes out, what
+      you pay for, and why the same request can give two different answers.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow">The problem</p>
+      <h2>It looks like any other API. It isn't.</h2>
+      <p>You have called a thousand HTTP APIs. This one breaks four habits:</p>
+      <table>
+        <tr><th>You expect</th><th>With a model</th></tr>
+        <tr><td>Same input, same output</td><td>The output is picked with some randomness. Two calls can differ.</td></tr>
+        <tr><td>Priced per request</td><td>Priced per <strong>token</strong>, in and out. A long prompt costs more than a short one.</td></tr>
+        <tr><td>Send any payload size</td><td>Everything must fit in the <strong>context window</strong>: a hard limit on tokens.</td></tr>
+        <tr><td>A typed response</td><td>Free text, unless you ask for a structure and check it.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow">The picture</p>
+      <h2>One token at a time</h2>
+      <p>A model does one thing: given some text, it scores every possible next piece of text. Your "answer" is
+        that step repeated in a loop.</p>
+      <figure class="canvas" aria-label="The prompt is tokenized, the model scores every next token, one is sampled, and the loop repeats until a stop token or the limit">
+        <script type="application/json">{"cols": 4, "nodes": [
+          {"id": "p", "col": 1, "row": 1, "icon": "doc", "title": "Your prompt", "kind": "plain"},
+          {"id": "t", "col": 2, "row": 1, "icon": "code", "title": "Tokenize", "kind": "model", "sub": "text to numbers"},
+          {"id": "m", "col": 3, "row": 1, "icon": "spark", "title": "The model", "kind": "model", "sub": "a score for every possible next token"},
+          {"id": "s", "col": 4, "row": 1, "icon": "bolt", "title": "Sample", "kind": "model", "sub": "pick one token"},
+          {"id": "d", "col": 3, "row": 2, "icon": "gate", "title": "Stop token, or limit hit?", "kind": "model", "shape": "gate"},
+          {"id": "o", "col": 2, "row": 2, "icon": "check", "title": "The answer", "kind": "plain", "shape": "end"}
+        ], "edges": [{"from": "p", "to": "t"}, {"from": "t", "to": "m"}, {"from": "m", "to": "s"}, {"from": "s", "to": "d", "via": "down"}, {"from": "d", "to": "m", "label": "no: add it to the text", "type": "alt"}, {"from": "d", "to": "o", "label": "yes"}]}</script>
+      </figure>
+      <p class="caption">A 150-token answer is 150 trips round this loop. That is why long answers are slow, and
+        why output tokens cost more than input tokens.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow">How it works</p>
+      <h2>Tokens, the window, and the dice</h2>
+
+      <h3>1. Text becomes tokens</h3>
+      <p>A token is a piece of a word. Common words are one token; rare words, codes and other languages are cut
+        into several. These are real splits from one widely used tokenizer:</p>
+      <div class="tokens" aria-label="10 tokens"><span>How</span><span> many</span><span> days</span><span> of</span><span> parental</span><span> leave</span><span> do</span><span> I</span><span> get</span><span>?</span></div>
+      <p class="caption">9 words → 10 tokens</p>
+      <div class="tokens" aria-label="14 tokens"><span>Un</span><span>bel</span><span>ievably</span><span>,</span><span> form</span><span> HR</span><span>-</span><span>229</span><span>1</span><span> was</span><span> mis</span><span>file</span><span>d</span><span>.</span></div>
+      <p class="caption">5 words → 14 tokens. Codes and unusual words are expensive.</p>
+      <div class="tokens" aria-label="12 tokens"><span>Hur</span><span> många</span><span> dag</span><span>ars</span><span> för</span><span>äld</span><span>ral</span><span>ed</span><span>ighet</span><span> får</span><span> jag</span><span>?</span></div>
+      <p class="caption">The same question in Swedish: 6 words → 12 tokens.</p>
+      <div class="callout">
+        <p><strong>Rule of thumb:</strong> in English, 100 tokens is about 75 words. Every model family has its
+          own tokenizer, so counts differ between models. To know, count with the model's own tokenizer, or read
+          the token usage the API returns.</p>
+      </div>
+
+      <h3>2. Everything shares one window</h3>
+      <p>The context window is the most tokens a model can handle in one call: your instructions, the documents
+        you paste in, the question, <em>and</em> the answer. Here is an 8,000-token window, filled:</p>
+      <div class="ctx wide" role="img" aria-label="Instructions 300, documents 6,300, question 50, answer 500, free 850">
+        <div class="model" style="flex: 300"></div>
+        <div class="retrieval" style="flex: 6300">Documents 6,300</div>
+        <div class="flow" style="flex: 50"></div>
+        <div class="reliability" style="flex: 500"></div>
+        <div class="free" style="flex: 850">free 850</div>
+      </div>
+      <ul class="legend">
+        <li class="model">Instructions 300</li>
+        <li class="retrieval">Documents 6,300</li>
+        <li class="flow">Question 50</li>
+        <li class="reliability">Reserved for the answer 500</li>
+      </ul>
+      <p class="caption">Windows today run from a few thousand to millions of tokens. Bigger is not free: you pay
+        for every token you send, and models use the middle of a long prompt less well (chapter 2).</p>
+      <p>The API is also <strong>stateless</strong>. The model remembers nothing between calls. A "conversation"
+        is your code sending the whole history again each time, as a list of messages with roles:
+        <code>system</code> (your rules), <code>user</code> (the person) and <code>assistant</code> (the model's
+        earlier replies). It is like HTTP without a session: the client carries the state.</p>
+
+      <h3>3. The next token is picked by weighted dice</h3>
+      <p>Take the text "Employees get 12 weeks of parental". The model scores every token in its vocabulary;
+        here are five of them. The scores become probabilities, and one token is drawn. Two settings change the
+        draw. Move them:</p>
+      <div class="demo wide">
+        <div class="controls">
+          <label for="temp">Temperature</label><input id="temp" type="range" min="0.1" max="2" step="0.1" value="1"><output id="temp-out">1.0</output>
+          <label for="topp">Top-p</label><input id="topp" type="range" min="0.5" max="1" step="0.05" value="1"><output id="topp-out">1.00</output>
+        </div>
+        <div class="bars" id="bars"></div>
+        <p class="caption" id="demo-note"></p>
+      </div>
+      <table>
+        <tr><th>Setting</th><th>What it does</th><th>Typical use</th></tr>
+        <tr><td><strong>Temperature</strong></td><td>Divides the scores before they become probabilities. Low sharpens the favourite; high flattens the field. At 0 the model always takes the top token.</td><td>0 for extraction, classification and evals. Higher for writing and ideas.</td></tr>
+        <tr><td><strong>Top-p</strong></td><td>Keeps the smallest set of tokens whose probabilities add up to p, and drops the rest. Cuts the unlikely tail.</td><td>0.9 to 0.95, or leave the default.</td></tr>
+        <tr><td><strong>Top-k</strong></td><td>Keeps only the k most likely tokens.</td><td>Mostly a default you don't touch.</td></tr>
+        <tr><td><strong>Max output tokens</strong></td><td>Stops the loop after N tokens. A cut-off answer is a symptom of this limit.</td><td>Always set it: it caps cost and runaway answers.</td></tr>
+      </table>
+      <div class="callout reliability">
+        <p><strong>Temperature 0 is not a guarantee.</strong> It makes answers as repeatable as the provider
+          allows, not identical forever: hardware, batching and silent model updates can still change a result.
+          Design for an output that may vary, and test with evals (chapter 17), not with string equality.</p>
+      </div>
+
+      <h3>4. Text out, unless you ask for a structure</h3>
+      <p>Your code wants fields, not prose. Three levels, from weakest to strongest:</p>
+      <table>
+        <tr><th>Level</th><th>How</th><th>What can go wrong</th></tr>
+        <tr><td>Ask in the prompt</td><td>"Answer as JSON with keys …"</td><td>Extra text around the JSON, a missing key, broken syntax.</td></tr>
+        <tr><td>JSON mode</td><td>An API switch: the output is valid JSON.</td><td>Valid JSON, but maybe not <em>your</em> shape.</td></tr>
+        <tr><td>Structured output</td><td>You pass a schema; the provider limits each token to what the schema allows.</td><td>The shape is right. The <em>values</em> can still be wrong.</td></tr>
+      </table>
+      <p>Whatever the level, treat the output like user input from the internet: parse it, validate it, and
+        decide what happens when it fails.</p>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow">Use it when, skip it when</p>
+      <h2>Is a model call the right tool?</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Use a model when</h3>
+          <ul>
+            <li>The input or output is language: questions, documents, summaries, emails.</li>
+            <li>The input is messy and rules would never cover it.</li>
+            <li>A wrong answer now and then is acceptable, or you can check the answer.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip it when</h3>
+          <ul>
+            <li>A query, a regex or an <code>if</code> does the job. That is cheaper, faster and exact.</li>
+            <li>You need arithmetic or an exact lookup. Do it in code and give the model the result.</li>
+            <li>The answer must be identical every time, or arrive in a few milliseconds.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow">The tools</p>
+      <h2>Who you call, and with what</h2>
+      <table>
+        <tr><th>Slot</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Hosted model APIs</td><td>OpenAI, Anthropic, Google Gemini</td><td>Pay per token, nothing to run. Where most projects start.</td></tr>
+        <tr><td>Hosts of open models</td><td>NVIDIA, Groq, Together AI, AWS Bedrock</td><td>Open-weight models (Llama, Mistral and others) behind the same kind of API.</td></tr>
+        <tr><td>Run it yourself</td><td>Ollama, vLLM, llama.cpp</td><td>On your laptop or your servers. Chapter 3 covers when.</td></tr>
+        <tr><td>Client library</td><td>The provider's SDK · <strong>LangChain chat models (this book)</strong> · LiteLLM</td><td>LangChain and LiteLLM give one interface over many providers, so swapping is a config change.</td></tr>
+      </table>
+      <p class="caption">Almost every provider accepts the same request shape: a list of role-tagged messages
+        plus settings. Learn it once.</p>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow">In the docs assistant</p>
+      <h2>Version 1: one call</h2>
+      <p>The first version of the assistant is a single request. We paste the policy sentence in by hand, because
+        nothing finds documents yet.</p>
+      <pre class="code"><code>from langchain_nvidia_ai_endpoints import ChatNVIDIA   # any LangChain chat model has this interface
+
+llm = ChatNVIDIA(
+    model="nvidia/nemotron-3.5-lightning-30b-a3b",
+    temperature=0,               # the most likely token every time: repeatable
+    max_completion_tokens=200,   # cap the answer, and the bill
+    timeout=60,                  # a hung call fails instead of freezing the request
+)
+
+reply = llm.invoke([
+    ("system", "You answer questions about company policy in one sentence."),
+    ("human", "Policy: employees get 12 weeks of paid parental leave.\n\nHow long is parental leave?"),
+])
+print(reply.content)
+print(reply.usage_metadata)</code></pre>
+      <div class="out-box">12 weeks
+{'input_tokens': 45, 'output_tokens': 4, 'total_tokens': 49}</div>
+      <p class="caption">Real output from one run, 0.8 seconds. The key comes from the environment, never from the code.</p>
+      <div class="callout">
+        <p><strong>About the library.</strong> <code>ChatNVIDIA</code> comes from LangChain, which this book uses
+          for one thing so far: a common interface over model providers. Swap the class for
+          <code>ChatOpenAI</code>, <code>ChatAnthropic</code> or <code>ChatGoogleGenerativeAI</code> and the rest
+          of the code stays the same. Chapter 14 covers what else LangChain does.</p>
+      </div>
+
+      <h3>The same call, as a typed object</h3>
+      <pre class="code"><code>from pydantic import BaseModel, Field
+
+class Answer(BaseModel):
+    answer: str = Field(description="One sentence")
+    weeks: int = Field(description="Length of the leave in weeks")
+    source: str = Field(description="The policy sentence the answer is based on")
+
+result = llm.with_structured_output(Answer).invoke(
+    "Policy: employees get 12 weeks of paid parental leave.\n\nHow long is parental leave?"
+)</code></pre>
+      <div class="out-box">Answer(answer='12 weeks', weeks=12, source='Policy: employees get 12 weeks of paid parental leave.')</div>
+      <p>The schema is a pydantic model: think of a Go struct with tags, or a NestJS DTO. The field descriptions
+        are part of the prompt, so write them for the model.</p>
+
+      <h3>What a call costs</h3>
+      <p>Cost is tokens times price. Prices are quoted per million tokens, with output several times dearer than
+        input. With example prices of $0.30 in and $2.50 out, a realistic request of 1,200 prompt tokens and a
+        150-token answer costs:</p>
+      <div class="callout">
+        <p>1,200 × $0.30 ÷ 1,000,000 + 150 × $2.50 ÷ 1,000,000 = <strong>$0.000735</strong><br>
+          10,000 questions a day: <strong>$7.35 a day</strong>.</p>
+      </div>
+      <p>The example prices are made up to show the sum; check your provider's price page. The lesson holds:
+        the prompt is usually most of the tokens, the answer is most of the waiting.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Get an API key from any provider (several have a free tier), run the first
+          snippet, and print <code>usage_metadata</code>. Then ask the same question five times at temperature 1
+          and compare the answers.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-2" data-sections="Sampling Fundamentals|Sampling Strategies|Structured Outputs|The Probabilistic Nature of AI">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 2 · Understanding Foundation Models</strong>
+          <span class="ref-sections">Sampling Fundamentals · Sampling Strategies · Structured Outputs · The Probabilistic Nature of AI</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-2" data-sections="LLM Tokenization">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 2 · Tokens and Embeddings</strong>
+          <span class="ref-sections">LLM Tokenization</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-6" data-sections="Controlling Model Output">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 6 · Prompt Engineering</strong>
+          <span class="ref-sections">Controlling Model Output</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-2" data-sections="Counting Tokens|One Token at a Time|Temperature and Probabilities">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 2 · Understanding LLMs</strong>
+          <span class="ref-sections">Counting Tokens · One Token at a Time · Temperature and Probabilities</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-3" data-sections="Chat Completion API">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 3 · Moving to Chat</strong>
+          <span class="ref-sections">Chat Completion API</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+  <script>
+    // The sampling demo: five candidate tokens with fixed scores (logits).
+    // probability = softmax(score / temperature); top-p keeps the smallest set that adds up to p.
+    const TOKENS = [["leave", 5], ["time", 3.5], ["pay", 3], ["benefits", 2], ["bananas", -1]];
+    const temp = document.getElementById("temp"), topp = document.getElementById("topp");
+
+    function draw() {
+      const t = Number(temp.value), p = Number(topp.value);
+      const weights = TOKENS.map(([, score]) => Math.exp(score / t));
+      const total = weights.reduce((a, b) => a + b, 0);
+      const probs = weights.map((w) => w / total);   // already sorted high to low, like the scores
+
+      let sum = 0;
+      const kept = probs.map((prob) => { const keep = sum < p - 1e-9; sum += prob; return keep; });
+      const keptTotal = probs.reduce((a, prob, i) => a + (kept[i] ? prob : 0), 0);
+
+      document.getElementById("temp-out").textContent = t.toFixed(1);
+      document.getElementById("topp-out").textContent = p.toFixed(2);
+      document.getElementById("bars").innerHTML = TOKENS.map(([word], i) => {
+        const share = kept[i] ? probs[i] / keptTotal : 0;   // what is left is rescaled to 100%
+        const pct = (share * 100).toFixed(1) + "%";
+        return `<span class="${kept[i] ? "" : "out"}">"${word}"</span>
+          <div class="track ${kept[i] ? "" : "out"}" title="${word}: ${pct}"><div class="fill" style="width:${share * 100}%"></div></div>
+          <span class="val ${kept[i] ? "" : "out"}">${kept[i] ? pct : "cut"}</span>`;
+      }).join("");
+      const cut = kept.filter((k) => !k).length;
+      document.getElementById("demo-note").textContent =
+        (t <= 0.3 ? "Low temperature: the favourite takes nearly everything. "
+          : t >= 1.6 ? "High temperature: even \"bananas\" gets a real chance. "
+          : "Temperature 1 uses the model's probabilities as they are. ") +
+        (cut ? `Top-p ${p.toFixed(2)} cut ${cut} token${cut > 1 ? "s" : ""}; the rest are rescaled to 100%.` : "");
+    }
+    temp.addEventListener("input", draw);
+    topp.addEventListener("input", draw);
+    draw();
+  </script>
+</body>
+</html>

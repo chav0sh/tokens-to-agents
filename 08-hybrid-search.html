@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hybrid search and reranking · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow retrieval">Part 2 · Giving it context · Chapter 8</p>
+    <h1>Hybrid search and reranking</h1>
+    <p class="lead">Two searches that fail on different questions, run together, then a second, slower model
+      that sorts the combined results. "Retrieve wide, rerank narrow" is the standard shape of production
+      retrieval.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow retrieval">The problem</p>
+      <h2>Each search has a blind spot</h2>
+      <table>
+        <tr><th></th><th>6 questions in everyday words</th><th>6 questions about a form code</th><th>Total</th></tr>
+        <tr><td>Vector search</td><td>6</td><td>5</td><td>11/12</td></tr>
+        <tr><td>Keyword search</td><td>1</td><td>6</td><td>7/12</td></tr>
+      </table>
+      <p>Real users send both kinds of question, and you cannot know which is coming. Picking one search means
+        accepting its blind spot. The question is how to combine two result lists whose scores are not on the
+        same scale: a cosine of 0.72 and a BM25 score of 5.13 cannot be added.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow retrieval">The picture</p>
+      <h2>Retrieve wide, rerank narrow</h2>
+      <ol class="steps wide">
+        <li class="node plain"><b>Question</b></li>
+        <li class="fork">
+          <div class="node retrieval"><b>Vector search</b><span>by meaning</span></div>
+          <div class="node retrieval"><b>Keyword search</b><span>by exact words</span></div>
+        </li>
+        <li class="node retrieval new"><b>Fuse</b><span>merge the two lists by rank</span></li>
+        <li class="node retrieval new"><b>Rerank</b><span>a second model scores each candidate against the question</span></li>
+        <li class="node plain"><b>Top few</b><span>into the prompt</span></li>
+      </ol>
+      <p class="caption">The two searches are cheap and cast a wide net: their job is that the right chunk is
+        somewhere among the candidates. The reranker is slow and precise: its job is to put it first.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow retrieval">How it works</p>
+      <h2>Fusion, then a judge</h2>
+
+      <h3>Reciprocal rank fusion (RRF)</h3>
+      <p>RRF ignores the scores and uses only positions. Each list gives a chunk <code>1 ÷ (60 + rank)</code>;
+        a chunk's total is the sum over the lists. Being near the top of either list is good; being near the top
+        of both is best.</p>
+      <div class="formula">score(chunk) = Σ over the lists   1 / (60 + rank of the chunk in that list)</div>
+      <p class="caption">60 is the customary constant. It keeps the gap between rank 1 and rank 2 small, so one
+        list cannot dominate.</p>
+
+      <h3>Worked: "When do I need FIN-140?"</h3>
+      <div class="ranks wide">
+        <div class="retrieval"><h4>Vector search</h4><ol><li>13 FIN-401 <b>0.72</b></li><li>6 FIN-140 <b>0.69</b></li><li>5 travel expenses <b>0.65</b></li></ol></div>
+        <div class="retrieval"><h4>Keyword search</h4><ol><li>6 FIN-140 <b>5.13</b></li><li>13 FIN-401 <b>1.35</b></li><li>5 travel expenses <b>1.14</b></li></ol></div>
+      </div>
+      <table>
+        <tr><th>Chunk</th><th>From vector search</th><th>From keyword search</th><th>Fused score</th></tr>
+        <tr><td>13 FIN-401 (wrong)</td><td>rank 1: 1 ÷ 61</td><td>rank 2: 1 ÷ 62</td><td>0.0325</td></tr>
+        <tr><td>6 FIN-140 (right)</td><td>rank 2: 1 ÷ 62</td><td>rank 1: 1 ÷ 61</td><td>0.0325</td></tr>
+        <tr><td>5 travel expenses</td><td>rank 3: 1 ÷ 63</td><td>rank 3: 1 ÷ 63</td><td>0.0317</td></tr>
+      </table>
+      <p><strong>A dead tie.</strong> The two searches disagree about first place, and fusion by rank has no way
+        to know which one to believe. It did its job, though: the right chunk is among the candidates. Somebody
+        still has to choose.</p>
+
+      <h3>The reranker chooses</h3>
+      <p>A reranker is a small model called a <strong>cross-encoder</strong>. It differs from an embedding model
+        in one way that matters:</p>
+      <table>
+        <tr><th></th><th>Embedding model (chapter 5)</th><th>Cross-encoder (reranker)</th></tr>
+        <tr><td><strong>Reads</strong></td><td>The question alone, each chunk alone. Compares two vectors afterwards.</td><td>The question and one chunk <em>together</em>, word against word.</td></tr>
+        <tr><td><strong>Speed</strong></td><td>Chunk vectors are computed once and indexed. Search is instant.</td><td>One model run per candidate, at question time. Nothing can be precomputed.</td></tr>
+        <tr><td><strong>So you use it</strong></td><td>To search everything.</td><td>To sort the 10 to 50 candidates the search found.</td></tr>
+      </table>
+      <p>Reading the pair together, it can see that the question says 140 and the chunk says 401:</p>
+      <div class="ranks wide">
+        <div class="reliability"><h4>Fused</h4><ol><li>13 FIN-401 <b>0.0325</b></li><li>6 FIN-140 <b>0.0325</b></li><li>5 travel expenses <b>0.0317</b></li></ol><p>Tied for first.</p></div>
+        <div class="retrieval"><h4>Fused, then reranked</h4><ol><li class="hit">6 FIN-140 <b>2.69</b></li><li>5 travel expenses <b>−3.60</b></li><li>13 FIN-401 <b>−4.49</b></li></ol><p>The right chunk first; the look-alike last.</p></div>
+      </div>
+      <p class="caption">Reranker scores are raw model outputs and can be negative. Only their order means anything.</p>
+
+      <h3>Explore all twelve questions</h3>
+      <div class="demo wide">
+        <label for="pick"><strong>Question:</strong></label>
+        <select id="pick"></select>
+        <div class="ranks" id="play" style="grid-template-columns: repeat(2, 1fr)"></div>
+        <p class="caption" id="play-note"></p>
+      </div>
+      <p>Try "How much time off do I get for a new baby?". Keyword search contributes only wrong chunks, fusion
+        ends in a tie between the right chunk and "New hires", and the reranker sends "New hires" to the bottom.
+        Then try "I have the flu": fusion puts a wrong chunk first because it appears in both lists.</p>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow retrieval">Use it when, skip it when</p>
+      <h2>What each stage buys you</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Add it when</h3>
+          <ul>
+            <li><strong>Hybrid:</strong> your evals show vector search missing exact terms, or keyword search missing paraphrases.</li>
+            <li><strong>Reranking:</strong> the right chunk is among the candidates but not at the top, or you want to send fewer chunks to the model.</li>
+            <li><strong>Both:</strong> a mixed audience asking mixed questions. This is the common production set-up.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip it when</h3>
+          <ul>
+            <li>One search already passes your evals. Every stage is more code, more latency, more to tune.</li>
+            <li><strong>Reranking:</strong> the response-time budget is tight. It adds a model run per candidate.</li>
+            <li>You have no eval yet. Without a score you cannot tell whether a stage helped.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow retrieval">The tools</p>
+      <h2>Fusion is ten lines; rerankers are models</h2>
+      <table>
+        <tr><th>Slot</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Fusion</td><td><strong>Your own RRF (this book)</strong> · built into Qdrant, Elasticsearch, OpenSearch and Weaviate hybrid queries</td><td>If your database does both searches, let it fuse them in one query.</td></tr>
+        <tr><td>Rerankers, run locally</td><td><strong>MS MARCO MiniLM cross-encoder via fastembed (this book)</strong> · BGE reranker · sentence-transformers <code>CrossEncoder</code></td><td>Small models, fine on a CPU for a handful of candidates.</td></tr>
+        <tr><td>Rerankers, hosted</td><td>Cohere Rerank · Voyage AI · Jina</td><td>One API call with the question and the candidates.</td></tr>
+      </table>
+      <p class="caption">Other names you will meet for improving retrieval: <em>query rewriting</em> (the model
+        rephrases the question before the search) and <em>contextual retrieval</em> (each chunk is stored with a
+        line saying which document and section it came from).</p>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow retrieval">In the docs assistant</p>
+      <h2>retrieve() is finished</h2>
+      <pre class="code"><code>from fastembed.rerank.cross_encoder import TextCrossEncoder
+
+def fuse(*result_lists):
+    """Reciprocal rank fusion: each list gives a chunk 1 / (60 + its rank). Sum, then sort."""
+    totals = {}
+    for results in result_lists:
+        for rank, (chunk_id, _) in enumerate(results, start=1):
+            totals[chunk_id] = totals.get(chunk_id, 0) + 1 / (60 + rank)
+    return sorted(totals.items(), key=lambda pair: pair[1], reverse=True)
+
+reranker = TextCrossEncoder("Xenova/ms-marco-MiniLM-L-6-v2")    # reads the question and one chunk together
+
+def rerank(question, candidates):
+    ids = [chunk_id for chunk_id, _ in candidates]
+    scores = reranker.rerank(question, [CHUNKS[i - 1]["text"] for i in ids])
+    return sorted(zip(ids, map(float, scores)), key=lambda pair: pair[1], reverse=True)
+
+def retrieve(question):
+    candidates = fuse(vector_search(question), keyword_search(question))
+    return [CHUNKS[chunk_id - 1] for chunk_id, _ in rerank(question, candidates)[:3]]</code></pre>
+
+      <h3>The scoreboard</h3>
+      <div class="scoreboard wide">
+        <div><b>11<small>/12</small></b><span>Vector search</span></div>
+        <div><b>7<small>/12</small></b><span>Keyword search</span></div>
+        <div><b>8<small>/12</small></b><span>Both, fused</span></div>
+        <div class="now"><b>12<small>/12</small></b><span>Fused, then reranked</span></div>
+      </div>
+      <table>
+        <tr><th></th><th>Right chunk ranked first</th><th>Right chunk among the candidates</th></tr>
+        <tr><td>Keyword search</td><td>7/12</td><td>8/12</td></tr>
+        <tr><td>Vector search</td><td>11/12</td><td>12/12</td></tr>
+        <tr><td>Both, fused</td><td>8/12</td><td>12/12</td></tr>
+        <tr><td>Fused, then reranked</td><td>12/12</td><td>12/12</td></tr>
+      </table>
+      <p>Two honest readings. First: fusion on its own made first place <em>worse</em> than vector search alone,
+        8 against 11, because every disagreement between the lists became a tie or a wrong winner. What fusion
+        guarantees is the second column: the right chunk is always a candidate. The reranker turns that into the
+        first column.</p>
+      <p>Second: this is 12 questions over 14 chunks. The numbers show the mechanism; they are not a benchmark.
+        On your data the gaps will differ, which is why you keep your own scoreboard.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Run <code>--explain</code> on a question of your own and read the four
+          lines. Then change <code>TOP_K</code> from 3 to 5 in <code>app/assistant.py</code> and rerun
+          <code>--eval</code>: do more candidates help or hurt the fused score?</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow retrieval">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="Comparing retrieval algorithms|Combining retrieval algorithms|Retrieval Optimization|Reranking|Query rewriting|Contextual retrieval">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">Comparing retrieval algorithms · Combining retrieval algorithms · Retrieval Optimization · Reranking · Query rewriting · Contextual retrieval</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-8" data-sections="Reranking|Retrieval Evaluation Metrics">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 8 · Semantic Search and Retrieval-Augmented Generation</strong>
+          <span class="ref-sections">Reranking · Retrieval Evaluation Metrics</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>Numbers on this page: <code>app/assistant.py --eval</code> and <code>--explain</code>, run on 2026-11-22.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/eval-data.js"></script>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+  <script>
+    // The playground: the four result lists for any of the 12 test questions (data from notes/figures.py).
+    const pick = document.getElementById("pick");
+    const LISTS = [["vector", "Vector search"], ["keyword", "Keyword search"], ["fused", "Fused"], ["reranked", "Fused, then reranked"]];
+    pick.innerHTML = EVAL_DATA.rows.map((row, i) => `<option value="${i}">${row.q}</option>`).join("");
+
+    function show() {
+      const row = EVAL_DATA.rows[pick.value];
+      document.getElementById("play").innerHTML = LISTS.map(([key, title]) => {
+        const items = row[key].map(([id, score]) =>
+          `<li class="${id === row.want ? "hit" : ""}">${EVAL_DATA.labels[id - 1]} <b>${score}</b></li>`).join("");
+        const verdict = row[key + "First"] ? "Right chunk first." : row[key].length ? "Right chunk not first (or tied)." : "No shared word: no results.";
+        return `<div class="${row[key + "First"] ? "retrieval" : "reliability"}"><h4>${title}</h4><ol>${items}</ol><p>${verdict}</p></div>`;
+      }).join("");
+      document.getElementById("play-note").textContent = `The right chunk is "${EVAL_DATA.labels[row.want - 1]}", marked ✓.`;
+    }
+    pick.addEventListener("change", show);
+    pick.value = 10;   // start on the FIN-140 question worked above
+    show();
+  </script>
+</body>
+</html>

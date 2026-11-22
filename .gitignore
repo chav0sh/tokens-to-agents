@@ -1,0 +1,7 @@
+# The NVIDIA key lives in .env, never committed
+.env
+
+.venv/
+__pycache__/
+*.pyc
+.ruff_cache/

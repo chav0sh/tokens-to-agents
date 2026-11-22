@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monitoring, cost, caching · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow reliability">Part 4 · Keeping it reliable · Chapter 19</p>
+    <h1>Monitoring, cost, caching</h1>
+    <p class="lead">Running an AI app is running a service that depends on a slow, metered, changing API. Most of
+      this chapter is operations you already know: logs, traces, timeouts, retries, caches. What is new is what
+      you measure, and three kinds of cache.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow reliability">The problem</p>
+      <h2>It is slow, it is billed per token, and it changes under you</h2>
+      <table>
+        <tr><th>What happens</th><th>What you need to have recorded</th></tr>
+        <tr><td>"The assistant gave me a wrong answer yesterday."</td><td>The question, the retrieved chunks, the exact prompt, the answer, the prompt version and the model.</td></tr>
+        <tr><td>The monthly bill doubles.</td><td>Tokens in and out, per call, per feature, per user.</td></tr>
+        <tr><td>Answers take four seconds.</td><td>Time per step, to know which step to fix.</td></tr>
+        <tr><td>Quality drops with no deploy on your side.</td><td>The model version per call, and an eval score over time.</td></tr>
+      </table>
+      <p>The last row is not hypothetical. While chapter 13 was being written, the model provider started
+        rejecting one kind of request (structured output with a particular schema) with an HTTP 400 error. The
+        same code had worked minutes before, and a different schema still worked. Nothing on our side had
+        changed.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow reliability">The picture</p>
+      <h2>One request, as a trace</h2>
+      <p>A trace is the timeline of one request, split into its steps: the same idea as a distributed trace
+        across microservices. Here is the docs assistant answering one question, measured:</p>
+      <div class="figure wide">
+        <svg viewBox="0 0 760 190" role="img" aria-label="Timeline of one request: vector search 9 milliseconds, keyword search under 1, rerank 43, model call 988, total 1039">
+          <text x="0" y="22" class="muted">vector search</text><rect x="170" y="10" width="5" height="16" rx="3" fill="var(--c-retrieval)"/><text x="182" y="23">9 ms</text>
+          <text x="0" y="54" class="muted">keyword search</text><rect x="175" y="42" width="2" height="16" rx="1" fill="var(--c-retrieval)"/><text x="184" y="55">0.1 ms</text>
+          <text x="0" y="86" class="muted">rerank</text><rect x="176" y="74" width="24" height="16" rx="4" fill="var(--c-retrieval)"/><text x="207" y="87">43 ms</text>
+          <text x="0" y="118" class="muted">model call</text><rect x="200" y="106" width="555" height="16" rx="4" fill="var(--c-model)"/><text x="480" y="119" text-anchor="middle" fill="#fff" style="fill:#fff">988 ms</text>
+          <line x1="170" y1="146" x2="755" y2="146" stroke="var(--line)"/><text x="170" y="170" class="muted">0</text><text x="755" y="170" text-anchor="end" class="muted">1,039 ms in total</text>
+        </svg>
+        <ul class="legend"><li class="retrieval">Retrieval (on this machine)</li><li class="model">The model (over the network)</li></ul>
+      </div>
+      <p class="caption">95% of the time is the model call. The whole of Part 2's retrieval, with two searches
+        and a reranker, is about 50 milliseconds. On this request the model used 145 input tokens and 18 output
+        tokens.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow reliability">How it works</p>
+      <h2>Measure, then cut</h2>
+
+      <h3>What to log on every model call</h3>
+      <table>
+        <tr><th>Field</th><th>Why</th></tr>
+        <tr><td>Tokens in, tokens out (and thinking tokens, if any)</td><td>This is the bill. Thinking tokens are charged as output.</td></tr>
+        <tr><td>Duration, and time to the first token if you stream</td><td>What the user feels.</td></tr>
+        <tr><td>Model name and exact version</td><td>To explain changes you did not make.</td></tr>
+        <tr><td>Prompt version</td><td>To tie an answer to the prompt that produced it (chapter 2).</td></tr>
+        <tr><td>Errors and retries</td><td>Rate limits, timeouts, refusals, invalid output.</td></tr>
+        <tr><td>A request ID that links the steps</td><td>So retrieval, the model call and the guard appear as one trace.</td></tr>
+      </table>
+      <div class="callout reliability">
+        <p><strong>Prompts and answers are user data.</strong> Logging the full text is what makes debugging
+          possible, and it is also personal data in your logs. Decide who can read it, how long it is kept, and
+          whether to mask it. Never log API keys.</p>
+      </div>
+
+      <h3>Where the money and the time go</h3>
+      <table>
+        <tr><th>Lever</th><th>Effect</th><th>Covered in</th></tr>
+        <tr><td>Send fewer tokens: fewer, better chunks; shorter instructions</td><td>Cost, and some speed.</td><td>Chapters 2, 8</td></tr>
+        <tr><td>Ask for a shorter answer; cap the output</td><td>Speed above all: output tokens are the slow part.</td><td>Chapter 1</td></tr>
+        <tr><td>A smaller model for the easy steps (routing, classification)</td><td>Cost and speed, often several times.</td><td>Chapters 3, 13</td></tr>
+        <tr><td>Fewer model calls: a workflow instead of an agent loop</td><td>Both.</td><td>Chapter 13</td></tr>
+        <tr><td>Stream the answer</td><td>Felt speed: the user reads while it writes.</td><td>Chapter 3</td></tr>
+        <tr><td>Cache</td><td>Both, to zero for a hit.</td><td>Below</td></tr>
+      </table>
+
+      <h3>Three caches</h3>
+      <table>
+        <tr><th>Cache</th><th>Key</th><th>Hit when</th><th>Risk</th></tr>
+        <tr><td><strong>Exact</strong></td><td>The normalised question (or the whole prompt).</td><td>The same question again.</td><td>Stale answers after the documents change. Clear it when you re-index.</td></tr>
+        <tr><td><strong>Semantic</strong></td><td>The question's embedding.</td><td>A question that is <em>similar enough</em> to a cached one.</td><td>Serving the answer to a different question.</td></tr>
+        <tr><td><strong>Prompt caching</strong> (by the provider)</td><td>The unchanged beginning of your prompt.</td><td>The next call starts with the same long prefix.</td><td>None for correctness. It only reduces price and latency for the repeated part.</td></tr>
+      </table>
+      <p>The exact cache, measured on the docs assistant:</p>
+      <table>
+        <tr><th>Call</th><th>Time</th><th></th></tr>
+        <tr><td>"What do I do if my computer is stolen?" (first time)</td><td>849 ms</td><td>a miss: full pipeline</td></tr>
+        <tr><td>The same question again</td><td>under 0.1 ms</td><td>a hit</td></tr>
+        <tr><td>"what do I do if my computer is STOLEN?  "</td><td>under 0.1 ms</td><td>a hit: the key is lower-cased and trimmed</td></tr>
+        <tr><td>"My laptop was stolen, what now?"</td><td>708 ms</td><td>a miss: same meaning, different words</td></tr>
+      </table>
+      <p>The last row is what a semantic cache is for. Before reaching for one, remember chapter 5: to the
+        embedding model, "When do I need FIN-140?" and the FIN-401 chunk scored 0.72, higher than the right one.
+        A semantic cache with a loose threshold would hand one form's answer to a question about another, with
+        no model involved to notice. If you use one, set the threshold with an eval and keep it tight.</p>
+      <p><strong>Prompt caching</strong> rewards one habit: put what never changes (instructions, tool
+        descriptions, examples) at the start of the prompt and what changes (passages, the question) at the end.
+        Providers charge less for a repeated prefix and process it faster.</p>
+
+      <h3>When the provider fails</h3>
+      <table>
+        <tr><th>Practice</th><th>Detail</th></tr>
+        <tr><td><strong>Timeouts</strong></td><td>On every call. A hung request must fail, not hold a worker.</td></tr>
+        <tr><td><strong>Retries with backoff</strong></td><td>For rate limits and server errors. Not for a 400: the request is wrong and will stay wrong.</td></tr>
+        <tr><td><strong>A fallback</strong></td><td>A second model or provider, behind the single function from chapter 3. Run your evals on it before you need it.</td></tr>
+        <tr><td><strong>Validate, then repair or refuse</strong></td><td>Output that fails its schema gets one retry with the error included, then a clear failure.</td></tr>
+        <tr><td><strong>Pin versions</strong></td><td>Of the model where you can, and of your libraries always.</td></tr>
+      </table>
+      <p>A <strong>gateway</strong> is one service in front of all your model calls that does these things in
+        one place: keys, rate limits, fallbacks, logging, spending caps. It becomes worth having when several
+        apps or teams call models.</p>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow reliability">Use it when, skip it when</p>
+      <h2>What to build first</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>From day one</h3>
+          <ul>
+            <li>A log line per model call: tokens, duration, model, prompt version, error.</li>
+            <li>A timeout and a retry limit on every call.</li>
+            <li>A cap on output tokens, and a spending alert at the provider.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>When the numbers ask for it</h3>
+          <ul>
+            <li><strong>An exact cache:</strong> when logs show the same questions repeating.</li>
+            <li><strong>A tracing tool:</strong> when a request has more steps than you can follow in a log.</li>
+            <li><strong>A semantic cache, a gateway, a fallback provider:</strong> when volume, cost or downtime justify another moving part.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow reliability">The tools</p>
+      <h2>The names in this slot</h2>
+      <table>
+        <tr><th>Slot</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Logging</td><td><strong>Your own table or log lines (this book)</strong></td><td>A <code>runs</code> table with the fields above answers most questions for a long time.</td></tr>
+        <tr><td>Tracing and evals</td><td>LangSmith · Langfuse · Arize Phoenix · OpenTelemetry</td><td>They show each request as a tree of steps with prompts and tokens. Langfuse and Phoenix are open source.</td></tr>
+        <tr><td>Gateways</td><td>LiteLLM · Portkey · OpenRouter</td><td>One endpoint over many providers, with keys, limits and fallbacks.</td></tr>
+        <tr><td>Caches</td><td>Redis or your database for exact matches · GPTCache or a vector database for semantic ones</td><td>An exact cache is a dictionary with an expiry.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow reliability">In the docs assistant</p>
+      <h2>A stopwatch and a dictionary</h2>
+      <pre class="code"><code>started = time.perf_counter()
+vector = vector_search(question);    after_vector = time.perf_counter()
+keyword = keyword_search(question);  after_keyword = time.perf_counter()
+ranked = rerank(question, fuse(vector, keyword)); after_rerank = time.perf_counter()
+reply = ask(question, passages);     finished = time.perf_counter()
+
+print(reply.usage_metadata)      # {'input_tokens': 145, 'output_tokens': 18, 'total_tokens': 163}</code></pre>
+      <pre class="code"><code>CACHE: dict[str, str] = {}
+
+def cached_answer(question: str) -> str:
+    key = " ".join(question.lower().split())          # exact match after trimming and lower-casing
+    if key not in CACHE:
+        CACHE[key] = ask(question, passages_for(question)).content
+    return CACHE[key]</code></pre>
+      <p>Crude and sufficient for a first version. In a real service the cache needs an expiry, has to be
+        cleared when the handbook is re-indexed, and must include the user in the key whenever answers depend on
+        who is asking.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Run <code>uv run python app/reliability.py trace</code> and see
+          where your time goes. Then find your provider's page on prompt caching and check whether your prompt's
+          fixed part comes first.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow reliability">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-10" data-sections="Step 3. Add Model Router and Gateway|Step 4. Reduce Latency with Caches|Monitoring and Observability|Logs and traces|User Feedback">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 10 · AI Engineering Architecture and User Feedback</strong>
+          <span class="ref-sections">Step 3. Add Model Router and Gateway · Step 4. Reduce Latency with Caches · Monitoring and Observability · Logs and traces · User Feedback</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-9" data-sections="Inference Performance Metrics">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 9 · Inference Optimization</strong>
+          <span class="ref-sections">Inference Performance Metrics</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>The timings are one run of <code>app/reliability.py trace</code> on 2026-11-22: a laptop CPU for retrieval and a hosted model over the internet. Your numbers will differ; the proportions usually do not. Prompt caching and gateways are described from general knowledge and were not run here.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

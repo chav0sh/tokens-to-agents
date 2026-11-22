@@ -1,0 +1,11 @@
+name,title,team,reports_to
+Erik Dahl,CEO,Management,
+Sara Holm,Director of Engineering,Management,Erik Dahl
+Omar Aziz,Director of Finance,Management,Erik Dahl
+Lena Ny,HR Partner,People,Erik Dahl
+Jonas Berg,Engineering Manager,Platform,Sara Holm
+Maria Lind,Engineer,Platform,Jonas Berg
+Tom Ek,Engineer,Platform,Jonas Berg
+Nora Vik,Engineering Manager,Apps,Sara Holm
+Ali Sund,Engineer,Apps,Nora Vik
+Ida Falk,Accountant,Finance,Omar Aziz

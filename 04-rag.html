@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RAG: the whole pattern · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow retrieval">Part 2 · Giving it context · Chapter 4</p>
+    <h1>RAG: the whole pattern</h1>
+    <p class="lead">Retrieval-augmented generation (RAG) is the most common pattern in AI products: find the few
+      passages that matter, put them in the prompt, let the model answer from them. This chapter shows the whole
+      thing working, and gives it a score. The rest of Part 2 improves one piece at a time.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow retrieval">The problem</p>
+      <h2>The model has never read your handbook</h2>
+      <p>A model knows what was in its training data. Your company's policies were not. There are three ways to
+        get them in:</p>
+      <table>
+        <tr><th>Option</th><th>How</th><th>The catch</th></tr>
+        <tr><td>Paste everything</td><td>Send the whole handbook with every question.</td><td>Works for a few pages. Beyond that: slow, expensive on every call, and the model loses the one relevant line among thousands.</td></tr>
+        <tr><td>Finetune</td><td>Train the model further on your documents.</td><td>Expensive, has to be redone when a policy changes, and the model still cannot say where an answer came from.</td></tr>
+        <tr class="you"><td class="you"><strong>Retrieve (RAG)</strong></td><td class="you">Search for the relevant passages per question; send only those.</td><td class="you">The answer is only as good as the search. That is what Part 2 is about.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow retrieval">The picture</p>
+      <h2>Two pipelines</h2>
+      <div class="map">
+        <div class="band">
+          <h3>Indexing <small>runs when the documents change</small></h3>
+          <ol class="steps">
+            <li class="node plain"><b>Handbook</b><span>your documents</span></li>
+            <li class="node retrieval"><p class="ch">ch. 9</p><b>Split into chunks</b><span>one idea per piece</span></li>
+            <li class="node retrieval"><p class="ch">ch. 5</p><b>Embed</b><span>text to vector</span></li>
+            <li class="node retrieval"><p class="ch">ch. 6</p><b>Store</b><span>a searchable index</span></li>
+          </ol>
+        </div>
+        <div class="band">
+          <h3>Answering <small>runs on every question</small></h3>
+          <ol class="steps">
+            <li class="node plain"><b>Question</b></li>
+            <li class="node retrieval"><p class="ch">ch. 5–8</p><b>Retrieve</b><span>the few best chunks</span></li>
+            <li class="node model"><p class="ch">ch. 2</p><b>Augment</b><span>chunks + question into the prompt</span></li>
+            <li class="node model"><p class="ch">ch. 1</p><b>Generate</b><span>the model answers from the chunks</span></li>
+            <li class="node plain"><b>Answer</b><span>with its source</span></li>
+          </ol>
+        </div>
+      </div>
+      <p class="caption">Retrieve, augment, generate: the three words in the name. It is a search engine feeding a
+        template, feeding a model. If you have built search with a results page, you have built two thirds of it.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow retrieval">How it works</p>
+      <h2>One question, start to finish</h2>
+
+      <h3>The documents</h3>
+      <p>The docs assistant's handbook, already split into 14 chunks. It is made up, so the right answers are
+        known. Every number in Part 2 is computed on it.</p>
+      <table>
+        <tr><th>#</th><th>Document</th><th>Text</th></tr>
+        <tr><td>1</td><td>Leave policy</td><td>Employees get 12 weeks of paid parental leave after the birth or adoption of a child.</td></tr>
+        <tr><td>2</td><td>Leave policy</td><td>Parental leave must be requested 30 days in advance using form HR-2291.</td></tr>
+        <tr><td>3</td><td>Leave policy</td><td>Unpaid leave of up to 4 weeks can be requested using form HR-2219.</td></tr>
+        <tr><td>4</td><td>Holiday policy</td><td>Full-time employees get 25 days of paid holiday per year. Up to 5 unused days carry over.</td></tr>
+        <tr><td>5</td><td>Expenses policy</td><td>Travel expenses are reimbursed within 14 days when submitted with receipts using form FIN-104.</td></tr>
+        <tr><td>6</td><td>Expenses policy</td><td>Expense claims above 500 euros need a director's approval using form FIN-140.</td></tr>
+        <tr><td>7</td><td>Remote work policy</td><td>Employees may work from home up to three days per week with their manager's approval.</td></tr>
+        <tr><td>8</td><td>Security policy</td><td>Laptops must be encrypted and locked when unattended. Report a lost device within 24 hours.</td></tr>
+        <tr><td>9</td><td>Sick leave policy</td><td>Sick leave is paid for up to 10 days per year. A doctor's note is required after 3 days.</td></tr>
+        <tr><td>10</td><td>Onboarding guide</td><td>New hires receive a laptop and a security briefing on their first day.</td></tr>
+        <tr><td>11</td><td>HR forms</td><td>Form HR-2192 is used to change the bank account for salary payments.</td></tr>
+        <tr><td>12</td><td>HR forms</td><td>Form HR-2912 is used to report a change of home address.</td></tr>
+        <tr><td>13</td><td>Finance forms</td><td>Form FIN-401 is used to request a company credit card.</td></tr>
+        <tr><td>14</td><td>Overtime policy</td><td>Overtime must be approved in advance and is paid at 150% of the hourly rate.</td></tr>
+      </table>
+
+      <h3>Step 1: retrieve</h3>
+      <p>The question is <em>"What do I do if my computer is stolen?"</em> Notice that the answer, chunk 8, shares
+        no word with it: the policy says "lost device". A search by meaning (chapter 5) returns the three
+        closest chunks:</p>
+      <div class="ranks wide">
+        <div class="retrieval"><h4>Retrieved</h4><ol><li class="hit">8 · Security policy: lost device <b>0.73</b></li><li>10 · Onboarding guide: new hires get a laptop <b>0.52</b></li><li>12 · HR forms: change of address <b>0.51</b></li></ol>
+          <p>The number is a similarity score. The first hit is right; the other two are filler.</p></div>
+      </div>
+
+      <h3>Step 2: augment</h3>
+      <p>The three chunks and the question go into the template from chapter 2:</p>
+      <div class="prompt-doc wide">
+        <div class="model"><pre>You answer employees' questions about company policy.
+Use only the passages below. If they don't contain the answer, say you don't know.
+Name the document you used.</pre><small><b>Instructions</b>Fixed.</small></div>
+        <div class="retrieval"><pre>[Security policy] Laptops must be encrypted and locked when unattended. Report a lost device within 24 hours.
+[Onboarding guide] New hires receive a laptop and a security briefing on their first day.
+[HR forms] Form HR-2912 is used to report a change of home address.</pre><small><b>Retrieved chunks</b>Different for every question.</small></div>
+        <div class="plain"><pre>Question: What do I do if my computer is stolen?
+Answer in one or two sentences, then the source.</pre><small><b>The question</b>and the refocus.</small></div>
+      </div>
+
+      <h3>Step 3: generate</h3>
+      <div class="out-box" style="margin-top: 0; border-radius: 16px">You must report a lost device within 24 hours. [Security policy]</div>
+      <p class="caption">The real answer from one run. The model used the right chunk, ignored the two fillers,
+        and named its source.</p>
+      <p>And a question the handbook does not cover, <em>"What is the dress code?"</em>: the search still
+        returns its three nearest chunks (it always returns something), none of them about clothes. Because the
+        instructions allow it, the model answers:</p>
+      <div class="out-box" style="margin-top: 0; border-radius: 16px">I don't know.</div>
+
+      <h3>Measure it: the scoreboard</h3>
+      <p>One good answer proves nothing. So before improving anything, write down test questions with known
+        answers. Ours are 12 questions, each with the chunk that answers it. Six are phrased in an employee's
+        own words; six ask about a form code.</p>
+      <table id="eval-table"><tr><th>Question</th><th>Right chunk</th><th>Search by meaning finds it first?</th></tr></table>
+      <div class="scoreboard wide">
+        <div class="now"><b>11<small>/12</small></b><span>Search by meaning (this chapter)</span></div>
+        <div class="later"><b>?</b><span>Keyword search (ch. 7)</span></div>
+        <div class="later"><b>?</b><span>Both, fused (ch. 8)</span></div>
+        <div class="later"><b>?</b><span>Fused, then reranked (ch. 8)</span></div>
+      </div>
+      <p class="caption">The score is "the right chunk is ranked first". Eleven of twelve.</p>
+      <p>The miss is worth a look. Asked <em>"When do I need FIN-140?"</em>, the search ranks the chunk about
+        <strong>FIN-401</strong> first (0.72) and the right one second (0.69). To a search by meaning, two form
+        codes with the same digits look almost alike. Chapters 7 and 8 fix this, and the scoreboard will show it.</p>
+      <div class="callout reliability">
+        <p><strong>This is the working method of AI engineering.</strong> A fixed set of cases, a score, one
+          change at a time. Without it you are tuning by gut feeling. Chapter 17 covers evals in full; from here
+          on, every chapter in this part ends with the scoreboard.</p>
+      </div>
+
+      <h3>When a RAG answer is wrong, look here first</h3>
+      <table>
+        <tr><th>Symptom</th><th>Cause</th><th>Where to fix it</th></tr>
+        <tr><td>The right chunk was not retrieved.</td><td>The search missed it. The most common failure by far.</td><td>Retrieval: chapters 5 to 9.</td></tr>
+        <tr><td>The right chunk was retrieved, the answer ignores it.</td><td>Too many chunks, or a vague prompt.</td><td>Fewer, better chunks; the prompt (chapter 2).</td></tr>
+        <tr><td>The answer states something no chunk says.</td><td>The model filled a gap from memory.</td><td>"Use only the passages", a way out, and a check (chapter 18).</td></tr>
+        <tr><td>The answer is right but outdated.</td><td>The index was built from old documents.</td><td>Re-index when documents change (chapter 9).</td></tr>
+      </table>
+      <p>Always print the retrieved chunks before you blame the model. If the answer is not in them, no prompt
+        will save it.</p>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow retrieval">Use it when, skip it when</p>
+      <h2>Is RAG the right pattern?</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Use RAG when</h3>
+          <ul>
+            <li>Answers must come from your own documents or data.</li>
+            <li>The content changes: you update an index, not a model.</li>
+            <li>Users need to see the source.</li>
+            <li>Different users may see different documents (filter the search by permission).</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip it when</h3>
+          <ul>
+            <li>Everything fits comfortably in the prompt. Send it all; add retrieval when it stops fitting.</li>
+            <li>The answer is a number from a database. That is a query, or a tool call (chapter 12).</li>
+            <li>The task needs no outside facts: rewriting, classifying, translating.</li>
+            <li>You want a different <em>style</em> or skill, not new facts. That is the case for finetuning (chapter 20).</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow retrieval">The tools</p>
+      <h2>Build it or take it off the shelf</h2>
+      <table>
+        <tr><th>Approach</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td><strong>Write it yourself (this book)</strong></td><td>An embedding model, an index, a prompt</td><td>About a hundred lines. You see and control every step, which is what you need to debug it.</td></tr>
+        <tr><td>Frameworks</td><td>LangChain, LlamaIndex, Haystack</td><td>Ready-made loaders, splitters and retrievers. Faster to start, harder to see inside.</td></tr>
+        <tr><td>Managed</td><td>File search built into the OpenAI, Google and AWS Bedrock platforms</td><td>Upload files, get RAG. The least work and the least control over retrieval.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow retrieval">In the docs assistant</p>
+      <h2>Version 3: it answers from the handbook</h2>
+      <p>The whole assistant is one file, <code>app/assistant.py</code>, next to this book, with the handbook in
+        <code>app/handbook.md</code>. This is the heart of it:</p>
+      <pre class="code"><code>SYSTEM = (
+    "You answer employees' questions about company policy.\n"
+    "Use only the passages below. If they don't contain the answer, say you don't know.\n"
+    "Name the document you used."
+)
+
+def answer(question: str) -> str:
+    chunks = retrieve(question)                                              # 1. retrieve
+    passages = "\n".join(f"[{c['doc']}] {c['text']}" for c in chunks)        # 2. augment
+    human = f"Passages:\n{passages}\n\nQuestion: {question}\n\nAnswer in one or two sentences, then the source."
+    return llm.invoke([("system", SYSTEM), ("human", human)]).content        # 3. generate</code></pre>
+      <p>Everything else in Part 2 happens inside <code>retrieve()</code>.</p>
+
+      <div class="callout try">
+        <p><strong>Try it.</strong> From the folder that holds this book:</p>
+        <ol>
+          <li><code>uv run python app/assistant.py --eval</code> prints the scoreboard. No model or key needed.</li>
+          <li><code>uv run python app/assistant.py --explain "When do I need FIN-140?"</code> shows what each search returns for one question.</li>
+          <li>With a model key set, ask it something: <code>uv run python app/assistant.py "Can I work from home?"</code></li>
+          <li>Add a paragraph to <code>handbook.md</code>, add a question for it to <code>EVAL</code>, and run the scoreboard again.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow retrieval">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="RAG|RAG Architecture">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">RAG · RAG Architecture</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-8" data-sections="From Search to RAG|Advanced RAG Techniques|RAG Evaluation">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 8 · Semantic Search and Retrieval-Augmented Generation</strong>
+          <span class="ref-sections">From Search to RAG · Advanced RAG Techniques · RAG Evaluation</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-5" data-sections="Dynamic Content|Retrieval-Augmented Generation">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 5 · Prompt Content</strong>
+          <span class="ref-sections">Dynamic Content · Retrieval-Augmented Generation</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/eval-data.js"></script>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+  <script>
+    // The 12 test questions, from the same data the app's --eval prints.
+    document.getElementById("eval-table").insertAdjacentHTML("beforeend", EVAL_DATA.rows.map((row) =>
+      `<tr><td>${row.q}</td><td>${EVAL_DATA.labels[row.want - 1]}</td><td>${row.vectorFirst ? "✓" : "✗ ranked second"}</td></tr>`
+    ).join(""));
+  </script>
+</body>
+</html>

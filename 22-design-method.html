@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Problem → pattern → tool · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Part 5 · Designing the system · Chapter 22</p>
+    <h1>Problem → pattern → tool</h1>
+    <p class="lead">A method for designing an AI system from a blank page. Start from the problem, pick the
+      patterns it needs, and only then choose tools. Seven questions, a few lookups, and one page you can fill in
+      for your own project.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow">The problem</p>
+      <h2>Most designs start from the wrong end</h2>
+      <p>"We should use agents." "Let's put it in a vector database." "Which framework?" These are tool
+        decisions made before anyone has written down what a good output looks like. The result is a system
+        shaped by its tools: retrieval where a lookup was needed, an agent where three fixed steps would do.</p>
+      <p>The patterns in this book are few. Almost every AI product is some combination of a handful of them. Design
+        is choosing which, in what order, for which part of the problem.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow">The picture</p>
+      <h2>Three decisions, in this order</h2>
+      <ol class="steps wide">
+        <li class="node plain"><b>The problem</b><span>the task, a good output, what a mistake costs</span></li>
+        <li class="node flow"><b>The patterns</b><span>where facts come from, who decides the steps, what checks it</span></li>
+        <li class="node model"><b>The tools</b><span>whatever fills each slot with the least new machinery</span></li>
+        <li class="node reliability"><b>The numbers</b><span>an eval set, a latency budget, a cost per request</span></li>
+      </ol>
+      <h3>Try it on your own idea</h3>
+      <div class="demo wide" id="picker">
+        <div class="controls" style="grid-template-columns: max-content 1fr">
+          <label for="q-facts">Where do the facts come from?</label>
+          <select id="q-facts"><option value="general">The model's general knowledge is enough</option><option value="docs" selected>Our documents</option><option value="live">Live data in our systems</option><option value="relations">Relationships between things</option></select>
+          <label for="q-out">What comes out?</label>
+          <select id="q-out"><option value="text" selected>Text for a person to read</option><option value="data">Structured data for a program</option><option value="action">An action in another system</option></select>
+          <label for="q-steps">Are the steps known in advance?</label>
+          <select id="q-steps"><option value="same">Yes, always the same</option><option value="branches" selected>Yes, with a few branches</option><option value="unknown">No, it depends on what is found</option></select>
+          <label for="q-cost">What does a wrong output cost?</label>
+          <select id="q-cost"><option value="low">A shrug</option><option value="mid" selected>An annoyed user or a wasted hour</option><option value="high">Money, safety or legal trouble</option></select>
+          <label for="q-volume">Volume and speed?</label>
+          <select id="q-volume"><option value="low" selected>Few requests, speed not critical</option><option value="high">Many requests, or a tight response time</option></select>
+        </div>
+        <div class="ranks" id="picker-out" style="grid-template-columns: 1fr"></div>
+      </div>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow">How it works</p>
+      <h2>Seven questions before any code</h2>
+      <ol class="stepper wide">
+        <li><h4>What is the task, and what does a good output look like?</h4><p><b>Do</b>Write ten real inputs, each with the output you would accept.</p><p><b>It decides</b>Everything. Those ten cases are your first eval set. If you cannot write them, the project is not ready to build.</p></li>
+        <li><h4>Where do the facts come from?</h4><p><b>Options</b>The model's own knowledge, your documents, a live system, relationships between things.</p><p><b>It decides</b>Nothing extra, retrieval, tools, or a graph.</p></li>
+        <li><h4>What comes out, and who consumes it?</h4><p><b>Options</b>Text for a person, data for a program, an action in another system.</p><p><b>It decides</b>Answers with sources, structured output with a schema, or an action behind a confirmation.</p></li>
+        <li><h4>Are the steps known in advance?</h4><p><b>Options</b>Always the same, a few branches, or unknown until you look.</p><p><b>It decides</b>One call, a workflow, or an agent.</p></li>
+        <li><h4>What does a mistake cost, and who catches it?</h4><p><b>Options</b>A shrug, an annoyed user, or money and legal trouble.</p><p><b>It decides</b>How much evaluation and guarding, and whether a person approves.</p></li>
+        <li><h4>How fast and how cheap must it be?</h4><p><b>Do</b>Add up the model calls, their tokens and their seconds before building.</p><p><b>It decides</b>The model tier, the number of calls, streaming, caching.</p></li>
+        <li><h4>What changes, and how often?</h4><p><b>Think of</b>Documents, prompts, models, the questions people ask.</p><p><b>It decides</b>Indexing jobs, versioning, monitoring, and how you find out it got worse.</p></li>
+      </ol>
+
+      <h3>From problem to pattern</h3>
+      <div class="qlist nq wide">
+        <div><q>Rewrite, summarise, translate or classify a text you already have.</q><span><span class="tag model">One call, good prompt</span></span><small>Nothing else. <a href="01-llm-api.html">Ch. 1</a>, <a href="02-prompts.html">2</a></small></div>
+        <div><q>Turn messy text into fields: invoices, emails, forms.</q><span><span class="tag model">Structured output</span></span><small>A schema, validated in code. <a href="01-llm-api.html">Ch. 1</a></small></div>
+        <div><q>Answer questions from your documents, with sources.</q><span><span class="tag retrieval">RAG</span></span><small><a href="04-rag.html">Ch. 4</a></small></div>
+        <div><q>People ask in their own words.</q><span><span class="tag retrieval">Vector search</span></span><small><a href="05-embeddings.html">Ch. 5</a>, <a href="06-vector-databases.html">6</a></small></div>
+        <div><q>People ask for codes, names, exact terms.</q><span><span class="tag retrieval">Keyword / hybrid</span></span><small>With a reranker. <a href="07-keyword-search.html">Ch. 7</a>, <a href="08-hybrid-search.html">8</a></small></div>
+        <div><q>The answer is a live value: a balance, an order status.</q><span><span class="tag flow">A tool or a lookup</span></span><small><a href="12-tool-calling.html">Ch. 12</a></small></div>
+        <div><q>The answer depends on who is connected to what.</q><span><span class="tag graphdb">A graph query</span></span><small>Resolved in code, added as a fact. <a href="10-graph-databases.html">Ch. 10</a>, <a href="11-graphrag.html">11</a></small></div>
+        <div><q>Different kinds of request need different handling.</q><span><span class="tag flow">Router + workflow</span></span><small><a href="13-workflows-and-agents.html">Ch. 13</a>, <a href="15-langgraph.html">15</a></small></div>
+        <div><q>The steps cannot be listed in advance.</q><span><span class="tag flow">Agent loop</span></span><small>With limits. <a href="13-workflows-and-agents.html">Ch. 13</a></small></div>
+        <div><q>Follow-up questions must make sense.</q><span><span class="tag flow">Memory</span></span><small><a href="16-memory-and-mcp.html">Ch. 16</a></small></div>
+        <div><q>It must do something: send, book, change.</q><span><span class="tag reliability">Write tools + a person</span></span><small>Least privilege, confirmation. <a href="12-tool-calling.html">Ch. 12</a>, <a href="18-guardrails.html">18</a></small></div>
+        <div><q>The format or style is wrong however you prompt.</q><span><span class="tag model">Examples, then finetune</span></span><small><a href="02-prompts.html">Ch. 2</a>, <a href="20-finetuning.html">20</a></small></div>
+      </div>
+
+      <h3>What every design needs, whatever the pattern</h3>
+      <div class="cards wide">
+        <div class="card reliability"><h4>A way to know it works</h4><p>Ten or more cases and a score, rerun on every change.</p><a class="more" href="17-evals.html">Chapter 17 →</a></div>
+        <div class="card reliability"><h4>A way out</h4><p>"I don't know" is an allowed answer, and off-topic requests are refused.</p><a class="more" href="02-prompts.html">Chapter 2 →</a></div>
+        <div class="card reliability"><h4>Checks in code</h4><p>Validate the structure. Sums, comparisons and lookups are done by code, not by the model.</p><a class="more" href="18-guardrails.html">Chapter 18 →</a></div>
+        <div class="card reliability"><h4>A record</h4><p>Per call: tokens, time, model, prompt version, error.</p><a class="more" href="19-monitoring.html">Chapter 19 →</a></div>
+        <div class="card reliability"><h4>Limits</h4><p>Timeouts, a cap on output tokens, a cap on steps, a spending alert.</p><a class="more" href="19-monitoring.html">Chapter 19 →</a></div>
+        <div class="card reliability"><h4>One place to change the model</h4><p>A single function or a config value.</p><a class="more" href="03-choosing-a-model.html">Chapter 3 →</a></div>
+      </div>
+
+      <h3>Budgets, worked for the docs assistant</h3>
+      <table>
+        <tr><th>Step</th><th>Time</th><th>Tokens in / out</th></tr>
+        <tr><td>Route the question (model call)</td><td>about 1 s</td><td>300 / 20</td></tr>
+        <tr><td>Retrieve, fuse, rerank</td><td>about 0.05 s</td><td>none</td></tr>
+        <tr><td>Write the answer (model call)</td><td>about 1 s</td><td>1,500 / 150</td></tr>
+        <tr><td><strong>Per question</strong></td><td><strong>about 2 s</strong></td><td><strong>1,800 / 170</strong></td></tr>
+      </table>
+      <p>At example prices of $0.30 and $2.50 per million tokens that is <strong>$0.000965 per question</strong>,
+        or about <strong>$48 for 50,000 questions a month</strong>. Two things follow at a glance: the two model
+        calls are the whole response time, so making retrieval faster is pointless; and the bill is small enough
+        that developer time, not tokens, is what to optimise. Do this sum before you build. It takes five
+        minutes and often changes the design.</p>
+      <p class="caption">Times are rounded from this book's measurements; token counts for a realistic prompt
+        are estimates (the demo app's measured call in chapter 19 was much smaller, 145 tokens in and 18 out, because
+        its handbook chunks are short); prices are examples.</p>
+
+      <h3>The rules that came up again and again</h3>
+      <div class="qlist rules nq wide">
+        <div><q>Measure before you improve.</q><small>The scoreboard came before the second search (chapter 4).</small></div>
+        <div><q>Look at the retrieved context before blaming the model.</q><small>Most wrong answers are retrieval misses (chapter 4).</small></div>
+        <div><q>Exact work belongs in code; the model gets the finished fact.</q><small>The director (chapter 11); 7 days against 10 (chapter 13).</small></div>
+        <div><q>The cheapest fix first: prompt, context, structure, a bigger model, finetuning.</q><small>Chapters 3 and 20.</small></div>
+        <div><q>Prefer a workflow; use an agent for the step that needs one.</q><small>Chapter 13.</small></div>
+        <div><q>Security lives in code and permissions, not in the prompt.</q><small>Six attacks (chapter 18).</small></div>
+        <div><q>One run is a sample.</q><small>13/14, then 14/14 (chapter 17).</small></div>
+      </div>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow">Use it when, skip it when</p>
+      <h2>Should this be an AI feature at all?</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>A good fit</h3>
+          <ul>
+            <li>The input or output is language, and rules would never cover the variety.</li>
+            <li>A person checks the result, or a wrong result is cheap and visible.</li>
+            <li>You can write down ten cases and what a good output is for each.</li>
+            <li>"Mostly right, much faster" is a real improvement on today.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>A poor fit</h3>
+          <ul>
+            <li>The task has an exact answer that a query or a rule computes.</li>
+            <li>Every output must be right and nothing checks it.</li>
+            <li>Nobody can say what a good output looks like.</li>
+            <li>The honest reason is "we need something with AI in it".</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow">The tools</p>
+      <h2>From pattern to tool</h2>
+      <ol class="stepper plain wide">
+        <li><h4>Model</h4><p><b>Start with</b>A small hosted model.</p><p><b>Move when</b>Evals fail after prompt and context are fixed: a larger tier. Privacy or very high volume: self-hosting.</p></li>
+        <li><h4>Vector search</h4><p><b>Start with</b>The database you already run (pgvector), or vectors in memory.</p><p><b>Move when</b>Scale, filtering or hybrid queries call for a dedicated vector database.</p></li>
+        <li><h4>Keyword search</h4><p><b>Start with</b>Your database's full-text search, or a small library.</p><p><b>Move when</b>Search quality matters: Elasticsearch or OpenSearch.</p></li>
+        <li><h4>Graph</h4><p><b>Start with</b>A table and a recursive query.</p><p><b>Move when</b>Paths are deep, varied or central: a graph database.</p></li>
+        <li><h4>Flow</h4><p><b>Start with</b>A plain function.</p><p><b>Move when</b>You need loops, pauses or saved conversations: LangGraph.</p></li>
+        <li><h4>Evals and logs</h4><p><b>Start with</b>A script and a table.</p><p><b>Move when</b>Several people need to compare runs: a platform.</p></li>
+        <li><h4>Glue</h4><p><b>Start with</b>The provider's SDK, or LangChain's interfaces.</p><p><b>Move when</b>More of a framework removes real work, and only there.</p></li>
+      </ol>
+      <p class="caption">The left column is always "what you already have". New infrastructure has to earn its
+        place with a failing eval or a missed budget.</p>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow">In the docs assistant</p>
+      <h2>The one-page design</h2>
+      <p>The seven questions, answered for the app in this book. This page is the design document: if you can
+        fill it in for your project, you are ready to build.</p>
+      <table>
+        <tr><th>Question</th><th>The docs assistant</th></tr>
+        <tr><td>1. Task and good output</td><td>Answer an employee's question about company policy in one or two sentences, naming the document. Twelve test questions, plus two it must decline.</td></tr>
+        <tr><td>2. Facts</td><td>The handbook (retrieval), the HR system (a lookup), the org chart (a graph query).</td></tr>
+        <tr><td>3. Output</td><td>Text for a person, with its source.</td></tr>
+        <tr><td>4. Steps</td><td>Known, three branches: policy, own holiday, other. A workflow with a router.</td></tr>
+        <tr><td>5. Cost of a mistake</td><td>An employee acts on a wrong rule. Medium. So: "I don't know" allowed, sources shown, output checks, a faithfulness eval.</td></tr>
+        <tr><td>6. Speed and price</td><td>About 2 seconds and a tenth of a cent per question. A small model; no cache needed yet.</td></tr>
+        <tr><td>7. What changes</td><td>The handbook (re-index on change), the model (pinned, evals before switching), the prompt (versioned).</td></tr>
+      </table>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Fill in this table for a feature you would like to build. Start with row 1,
+          and do not go on to row 2 until you have written ten cases.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-1" data-sections="Planning AI Applications|The role of AI and humans in the application|Setting Expectations|Milestone Planning">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 1 · Introduction to Building AI Applications with Foundation Models</strong>
+          <span class="ref-sections">Planning AI Applications · The role of AI and humans in the application · Setting Expectations · Milestone Planning</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-4" data-sections="Design Your Evaluation Pipeline">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 4 · Evaluate AI Systems</strong>
+          <span class="ref-sections">Design Your Evaluation Pipeline</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-10" data-sections="AI Engineering Architecture">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 10 · AI Engineering Architecture and User Feedback</strong>
+          <span class="ref-sections">AI Engineering Architecture</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-4" data-sections="The Anatomy of the Loop">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 4 · Designing LLM Applications</strong>
+          <span class="ref-sections">The Anatomy of the Loop</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-9" data-sections="Would a Conversational Agent Suffice?">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 9 · LLM Workflows</strong>
+          <span class="ref-sections">Would a Conversational Agent Suffice?</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>The seven questions and the lookups are this book's own summary of its chapters, not taken from any one of the three books.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+  <script>
+    // The picker: five answers in, a list of patterns out. The rules are the tables on this page.
+    const ADVICE = {
+      facts: {
+        general: ["No retrieval", "A prompt and a model call are enough. Add retrieval only when you meet facts the model does not have. (Chapters 1, 2)"],
+        docs: ["RAG", "Split, embed and index the documents; retrieve the best chunks into the prompt. Start with vector search; add keyword search and a reranker when your evals show misses. (Chapters 4 to 9)"],
+        live: ["Tools, or a lookup in code", "Call the system that holds the value. If the lookup is always needed, do it in code before the prompt; if the model must decide, make it a tool. (Chapter 12)"],
+        relations: ["A graph query", "Store the connections in a graph database (or a table with a recursive query), let a query resolve the question, and hand the model the finished fact. (Chapters 10, 11)"],
+      },
+      out: {
+        text: ["Answers with sources", "Ask for the source in the prompt and check in code that it is a real one. (Chapters 2, 18)"],
+        data: ["Structured output", "Define a schema, request structured output, validate it, retry once with the error, then fail clearly. (Chapter 1)"],
+        action: ["Write tools behind a confirmation", "Narrow permissions, a person approves anything that cannot be undone, and every action is logged. (Chapters 12, 18)"],
+      },
+      steps: {
+        same: ["One call, or a chain in a plain function", "No router, no framework. (Chapter 13)"],
+        branches: ["A workflow with a router", "A classifier picks the branch; your code runs the steps. Move to LangGraph when you need loops, pauses or saved conversations. (Chapters 13, 15)"],
+        unknown: ["An agent loop, with limits", "Read-only tools first, a ceiling on steps and spend, and a strong model. Keep the predictable parts as a workflow around it. (Chapter 13)"],
+      },
+      cost: {
+        low: ["Light checks", "A handful of eval cases and a log line per call. (Chapters 17, 19)"],
+        mid: ["Evals in CI and output checks", "A fixed eval set rerun on every change, checks in code on the way out, a judge for faithfulness. (Chapters 17, 18)"],
+        high: ["A person in the loop", "Everything above, plus human approval, an audit log, and attack cases in the eval set. Consider whether the model should only draft. (Chapters 17, 18)"],
+      },
+      volume: {
+        low: ["Optimise for quality", "A larger model is affordable. No cache yet. (Chapter 3)"],
+        high: ["Optimise for cost and speed", "The smallest model that passes the evals, short outputs, streaming, an exact cache, and the fixed part of the prompt first. (Chapters 3, 19)"],
+      },
+    };
+    const KEYS = ["facts", "out", "steps", "cost", "volume"];
+    function advise() {
+      document.getElementById("picker-out").innerHTML = "<div class=\"flow\"><h4>Your design, as a first sketch</h4><ol>" +
+        KEYS.map((key) => {
+          const [title, text] = ADVICE[key][document.getElementById("q-" + key).value];
+          return `<li><strong>${title}.</strong> ${text}</li>`;
+        }).join("") + "</ol><p>Then write ten test cases before any of it. (Chapter 17)</p></div>";
+    }
+    KEYS.forEach((key) => document.getElementById("q-" + key).addEventListener("change", advise));
+    advise();
+  </script>
+</body>
+</html>

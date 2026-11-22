@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chunking and indexing · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow retrieval">Part 2 · Giving it context · Chapter 9</p>
+    <h1>Chunking and indexing</h1>
+    <p class="lead">So far the handbook arrived neatly cut into 14 chunks. Real documents are PDFs, wiki pages and
+      long policies. How you cut them decides what the search can find, and it is the least glamorous, most
+      underrated part of a RAG system.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow retrieval">The problem</p>
+      <h2>Too big is blurry, too small is meaningless</h2>
+      <table>
+        <tr><th>Chunk</th><th>What goes wrong</th></tr>
+        <tr><td><strong>A whole document</strong></td><td>One vector for forty topics is a blur that matches nothing well. It may exceed the embedding model's input limit and be cut off silently. And it fills the prompt with text the question does not need.</td></tr>
+        <tr><td><strong>A single sentence</strong></td><td>"It must be requested 30 days in advance." What must? The chunk lost the sentence before it, so neither the search nor the model can use it.</td></tr>
+        <tr><td><strong>Cut at a fixed length</strong></td><td>The cut lands mid-sentence or between a rule and its exception. Each half is retrieved without the other.</td></tr>
+      </table>
+      <p>A good chunk is one idea, complete enough to make sense on its own.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow retrieval">The picture</p>
+      <h2>The indexing pipeline</h2>
+      <ol class="steps wide">
+        <li class="node plain"><b>Load</b><span>PDF, HTML, wiki, tickets</span></li>
+        <li class="node retrieval"><b>Clean</b><span>to plain text; drop menus, footers, page numbers</span></li>
+        <li class="node retrieval new"><b>Split</b><span>into chunks of one idea</span></li>
+        <li class="node retrieval new"><b>Label</b><span>title, section, date, who may read it</span></li>
+        <li class="node retrieval"><b>Embed and index</b><span>vectors + keywords</span></li>
+      </ol>
+      <p class="caption">A batch job, like any import: it runs when documents change, not when a question
+        arrives. Everything a search can ever return was decided here.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow retrieval">How it works</p>
+      <h2>Ways to split, and what they cost</h2>
+      <table>
+        <tr><th>Strategy</th><th>How</th><th>Good for</th></tr>
+        <tr><td><strong>By structure</strong></td><td>Use the document's own units: a heading and its paragraph, one rule, one Q&amp;A pair, one function.</td><td>Anything with structure. The best option when you have it.</td></tr>
+        <tr><td><strong>Recursive</strong></td><td>Split by section; if a piece is still too long, by paragraph; then by sentence.</td><td>Mixed documents. The usual default in libraries.</td></tr>
+        <tr><td><strong>Fixed size with overlap</strong></td><td>Every N tokens, each chunk repeating the last few sentences of the one before.</td><td>Text with no structure at all: transcripts, logs.</td></tr>
+      </table>
+      <p><strong>Overlap</strong> means neighbouring chunks share a little text, so a sentence cut at a boundary
+        survives whole in at least one of them.</p>
+
+      <h3>The size trade-off</h3>
+      <table>
+        <tr><th></th><th>Smaller chunks</th><th>Larger chunks</th></tr>
+        <tr><td><strong>Search</strong></td><td>Sharper: one topic per vector</td><td>Blurrier: several topics averaged</td></tr>
+        <tr><td><strong>Context for the model</strong></td><td>May miss the surrounding sentences</td><td>Carries its own context</td></tr>
+        <tr><td><strong>In the prompt</strong></td><td>More chunks fit</td><td>Fewer fit</td></tr>
+        <tr><td><strong>Index</strong></td><td>More vectors to store and search</td><td>Fewer</td></tr>
+      </table>
+      <p>A few hundred tokens per chunk is a common starting point. There is no best size: it depends on your
+        documents and questions, and the way to find it is to change it and rerun your scoreboard.</p>
+
+      <h3>Worked: a 200-page handbook</h3>
+      <div class="callout retrieval">
+        <p>200 pages ≈ 100,000 words ≈ <strong>133,000 tokens</strong> (100 tokens per 75 words).<br>
+          Chunks of 400 tokens with 50 overlapping: a new chunk every 350 tokens → 133,000 ÷ 350 ≈ <strong>381 chunks</strong>.<br>
+          Stored vectors: 381 × 1,536 bytes ≈ <strong>0.6 MB</strong>.<br>
+          Per question, 3 chunks go into the prompt: <strong>1,200 tokens</strong> instead of 133,000.</p>
+      </div>
+      <p>The whole handbook is small for a database and large for a prompt. That gap is why retrieval exists.</p>
+
+      <h3>Labels: what you store next to the text</h3>
+      <table>
+        <tr><th>Label</th><th>Used for</th></tr>
+        <tr><td>Document title, section</td><td>The citation in the answer. Also worth putting <em>into</em> the chunk's text, so the search and the model know where a lone paragraph came from.</td></tr>
+        <tr><td>Source link or ID</td><td>Letting the user open the original.</td></tr>
+        <tr><td>Date, version</td><td>Preferring the current policy over last year's.</td></tr>
+        <tr><td>Who may read it</td><td>Filtering the search per user. Permissions belong in the query (chapter 6), never in the prompt.</td></tr>
+      </table>
+
+      <h3>Keeping the index fresh</h3>
+      <p>The index is a copy of your documents, so it goes stale like any cache. Store a hash of each document:
+        when it changes, delete that document's chunks and index it again. Two events force a full rebuild:
+        changing the embedding model, and changing how you split.</p>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow retrieval">Use it when, skip it when</p>
+      <h2>How much effort to spend here</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Spend time on chunking when</h3>
+          <ul>
+            <li>Documents are long, or mix many topics.</li>
+            <li>The scoreboard shows the right passage is never retrieved, or arrives cut in half.</li>
+            <li>Sources are messy: PDFs with tables, scanned pages, HTML full of navigation.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip it when</h3>
+          <ul>
+            <li>Your data is already small records: FAQ entries, tickets, product descriptions. One record, one chunk.</li>
+            <li>The whole corpus fits in the prompt. Then there is nothing to split.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow retrieval">The tools</p>
+      <h2>Loaders and splitters</h2>
+      <table>
+        <tr><th>Slot</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Getting text out of files</td><td>pypdf · Unstructured · Docling · LlamaParse</td><td>PDFs are the hard part: tables, columns, scans. Check the extracted text by eye before anything else.</td></tr>
+        <tr><td>Splitting</td><td><strong>Your own function (this book)</strong> · LangChain text splitters (<code>RecursiveCharacterTextSplitter</code>) · LlamaIndex node parsers</td><td>A splitter that follows your document's structure is often twenty lines and beats a generic one.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow retrieval">In the docs assistant</p>
+      <h2>The handbook is split by its own structure</h2>
+      <p><code>handbook.md</code> has a heading per policy and one rule per paragraph. So: one chunk per
+        paragraph, labelled with its heading.</p>
+      <pre class="code"><code>def load_chunks() -> list[dict]:
+    """One chunk per paragraph, each carrying the title of its section."""
+    chunks, title = [], ""
+    for block in re.split(r"\n\s*\n", HANDBOOK.read_text(encoding="utf-8").strip()):
+        if block.startswith("# "):
+            title = block[2:].strip()                       # a heading: remember it
+        else:
+            chunks.append({"id": len(chunks) + 1, "doc": title, "text": " ".join(block.split())})
+    return chunks</code></pre>
+      <div class="out-box">{'id': 1, 'doc': 'Leave policy', 'text': 'Employees get 12 weeks of paid parental leave after the birth or adoption of a child.'}
+{'id': 2, 'doc': 'Leave policy', 'text': 'Parental leave must be requested 30 days in advance using form HR-2291.'}
+…</div>
+      <p>The <code>doc</code> label is what lets the answer end with "[Security policy]". The index is rebuilt
+        from the file each time the app starts: with 14 chunks that takes a moment and can never be stale.</p>
+
+      <h3>The scoreboard</h3>
+      <div class="scoreboard wide">
+        <div><b>11<small>/12</small></b><span>Vector search</span></div>
+        <div><b>7<small>/12</small></b><span>Keyword search</span></div>
+        <div><b>8<small>/12</small></b><span>Both, fused</span></div>
+        <div class="now"><b>12<small>/12</small></b><span>Fused, then reranked</span></div>
+      </div>
+      <p>Unchanged: this chapter explained a piece that was already in place. On real documents, chunking is
+        often where the next points come from.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Put two rules in one paragraph of <code>handbook.md</code> and ask about the
+          second one. Then split them again. Watch the similarity score of that chunk in <code>--explain</code>.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow retrieval">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="Retrieval Optimization|Chunking strategy|Contextual retrieval">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">Retrieval Optimization · Chunking strategy · Contextual retrieval</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-8" data-sections="Dense Retrieval">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 8 · Semantic Search and Retrieval-Augmented Generation</strong>
+          <span class="ref-sections">Dense Retrieval</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Evals · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow reliability">Part 4 · Keeping it reliable · Chapter 17</p>
+    <h1>Evals</h1>
+    <p class="lead">An eval is a test suite for a system whose output is never exactly the same twice. You have
+      been using one since chapter 4: the scoreboard. This chapter is the full picture: what to test, how to
+      grade open-ended text, and why this is the skill that separates AI engineering from prompt tinkering.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow reliability">The problem</p>
+      <h2>"It worked when I tried it" is not a test</h2>
+      <p>With ordinary code, you write <code>assert result == expected</code> and you are done. Here the result
+        is a sentence, phrased differently on each run, and "correct" has several parts: is it true, is it
+        complete, does it come from the documents, does it answer the question that was asked?</p>
+      <p>Meanwhile everything you change moves the output: a word in the prompt, the chunk size, a model
+        upgrade you did not ask for. A change that fixes one question quietly breaks two others. Without a fixed
+        set of cases and a score, you cannot see that, and you end up tuning by feeling.</p>
+      <p>So write the cases first. Huyen's <cite>AI Engineering</cite> calls this <strong>evaluation-driven
+        development</strong>, after test-driven development: decide how the application will be judged before you
+        build it. The cases say what a good answer is; the score says whether a change helped.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow reliability">The picture</p>
+      <h2>The loop you run for every change</h2>
+      <figure class="canvas" aria-label="The eval loop: run the system on every case, grade each output, one score, keep the change if better or undo it, change one thing, run again">
+        <script type="application/json">{"cols": 4, "nodes": [
+          {"id": "cases", "col": 1, "row": 1, "icon": "db", "title": "Cases", "kind": "plain", "sub": "input + what a good output looks like"},
+          {"id": "run", "col": 2, "row": 1, "icon": "spark", "title": "Run the system", "kind": "model", "sub": "on every case"},
+          {"id": "grade", "col": 3, "row": 1, "icon": "eval", "title": "Grade each output", "kind": "reliability"},
+          {"id": "score", "col": 4, "row": 1, "icon": "pulse", "title": "One score", "kind": "reliability"},
+          {"id": "change", "col": 2, "row": 2, "icon": "code", "title": "Change one thing", "kind": "reliability"},
+          {"id": "keep", "col": 3, "row": 2, "icon": "check", "title": "Keep the change", "kind": "plain"},
+          {"id": "better", "col": 4, "row": 2, "icon": "gate", "title": "Better than last time?", "kind": "reliability", "shape": "gate"},
+          {"id": "undo", "col": 3, "row": 3, "icon": "swap", "title": "Undo it", "kind": "plain"}
+        ], "edges": [{"from": "cases", "to": "run"}, {"from": "run", "to": "grade"}, {"from": "grade", "to": "score"}, {"from": "score", "to": "better"}, {"from": "better", "to": "keep", "label": "yes"}, {"from": "better", "to": "undo", "label": "no", "via": "down"}, {"from": "keep", "to": "change"}, {"from": "undo", "to": "change"}, {"from": "change", "to": "run"}]}</script>
+      </figure>
+      <p class="caption">Exactly the loop of a test suite in continuous integration, with one difference: the
+        result is a score that moves, not a green tick.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow reliability">How it works</p>
+      <h2>What to test and who grades it</h2>
+
+      <h3>Test each part, then the whole</h3>
+      <table>
+        <tr><th>Level</th><th>Question</th><th>In the docs assistant</th></tr>
+        <tr><td><strong>A component</strong></td><td>Did retrieval return the right chunk? Did the router pick the right branch?</td><td>The scoreboard: 12/12 (chapter 8). The router test: 7/8 (chapter 13).</td></tr>
+        <tr><td><strong>The answer</strong></td><td>Is the final text correct, and does it stick to the passages?</td><td>This chapter.</td></tr>
+        <tr><td><strong>The task</strong></td><td>Did the user get what they came for?</td><td>Feedback from real use: thumbs, follow-up questions, tickets avoided.</td></tr>
+      </table>
+      <p>Component evals are cheap and tell you <em>where</em> a failure is. Start there: when an answer is wrong,
+        the first thing to know is whether retrieval found the chunk.</p>
+
+      <h3>Three graders</h3>
+      <table>
+        <tr><th>Grader</th><th>How</th><th>Strength</th><th>Weakness</th></tr>
+        <tr><td><strong>Code</strong></td><td>String and structure checks: contains the phrase, names the document, parses as JSON, matches a pattern.</td><td>Free, instant, the same every time.</td><td>Only sees what you thought to check, and trips over harmless rewording.</td></tr>
+        <tr><td><strong>A model as judge</strong></td><td>A second model call reads the output against a rule you write: "is every claim supported by the passages?"</td><td>Can judge meaning. Scales to thousands of cases.</td><td>Costs a call per case, can be wrong itself, and must be tested too.</td></tr>
+        <tr><td><strong>A person</strong></td><td>Somebody who knows the subject reads the outputs.</td><td>The ground truth.</td><td>Slow and expensive. Use it to check the other two.</td></tr>
+      </table>
+
+      <h3>A real run: the two graders disagree</h3>
+      <p>Fourteen cases: the twelve scoreboard questions, each with a phrase the answer must contain and the
+        document it must name, plus two questions the handbook cannot answer, where the right output is "I
+        don't know". Each answer was graded twice.</p>
+      <div class="scoreboard wide">
+        <div><b>13<small>/14</small></b><span>Code checks</span></div>
+        <div><b>13<small>/14</small></b><span>Model as judge: "faithful to the passages?"</span></div>
+      </div>
+      <p>Same score, and not the same case:</p>
+      <table>
+        <tr><th>Question</th><th>The assistant's answer</th><th>Code checks</th><th>Judge</th><th>Who is right</th></tr>
+        <tr><td>What do I do if my computer is stolen?</td><td>"Report the stolen device to your manager and IT support immediately, and file a police report. You must also report the loss within 24 hours per company policy. Source: [Security policy]"</td><td>Pass: it contains "24 hours" and names the policy.</td><td><strong>Fail:</strong> manager, IT support and police report are not in the passages.</td><td>The judge. The model invented three instructions, and the string check never saw them.</td></tr>
+        <tr><td>How much is the Christmas bonus?</td><td>"The provided documents do not mention a Christmas bonus."</td><td><strong>Fail:</strong> the check looked for the words "don't know".</td><td>Pass.</td><td>The judge. A correct refusal in other words: a false alarm from the string check.</td></tr>
+      </table>
+      <p>Neither grader alone told the truth. The cheap checks catch the obvious; the judge catches meaning; the
+        disagreements are the cases worth a human minute.</p>
+
+      <h3>Then the same eval was run again</h3>
+      <div class="scoreboard wide">
+        <div><b>14<small>/14</small></b><span>Code checks, second run</span></div>
+        <div><b>14<small>/14</small></b><span>Model as judge, second run</span></div>
+      </div>
+      <p>Nothing was changed. The same code, the same prompt, temperature 0, and the invented police report did
+        not appear this time. This is chapter 1's warning in practice: the output of a hosted model can differ
+        between identical calls. Two consequences:</p>
+      <ul>
+        <li>One run is a sample. Run an eval several times before trusting a small difference between two scores.</li>
+        <li>A failure that shows up one time in two is still a failure your users will meet.</li>
+      </ul>
+
+      <h3>Test the judge before you trust it</h3>
+      <p>A judge is a prompt, so it gets its own cases: answers you know are wrong. Two were planted:</p>
+      <table>
+        <tr><th>Planted answer</th><th>The judge's verdict</th></tr>
+        <tr><td>"Full-time employees get <strong>30</strong> days of paid holiday per year."</td><td>Not supported: "the passage states 25 days."</td></tr>
+        <tr><td>"You get 25 days of paid holiday, and <strong>unused days are paid out in cash</strong>."</td><td>Not supported: "the passage only states they carry over."</td></tr>
+      </table>
+      <p>What makes a judge prompt work: one criterion per judge, a yes-or-no verdict instead of a 1-to-10 score,
+        and the reason written <em>before</em> the verdict (chapter 2).</p>
+
+      <h3>Where the cases come from</h3>
+      <table>
+        <tr><th>Source</th><th>Why</th></tr>
+        <tr><td>Ten to twenty questions you write on day one.</td><td>Enough to start. A small eval you run beats a large one you plan.</td></tr>
+        <tr><td>Every bug, as a new case.</td><td>The FIN-140 mix-up became a permanent test. This is how the set grows.</td></tr>
+        <tr><td>Questions with no answer, and hostile ones.</td><td>"I don't know" and "no" are behaviours too (chapter 18).</td></tr>
+        <tr><td>Real questions from logs, once you have users.</td><td>They ask things you never thought of.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow reliability">Use it when, skip it when</p>
+      <h2>How much eval is enough?</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Always</h3>
+          <ul>
+            <li>A handful of cases and a score, before the first prompt change. Even for a weekend project.</li>
+            <li>Code checks for anything code can check: format, required fields, citations, forbidden content.</li>
+            <li>A rerun before every model or prompt change reaches users.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Add later, when it pays</h3>
+          <ul>
+            <li>A model as judge, when correctness depends on meaning and you have more cases than you can read.</li>
+            <li>Repeated runs and statistics, when you compare versions that are close.</li>
+            <li>Evals on live traffic, when you have traffic.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow reliability">The tools</p>
+      <h2>A script first, a platform later</h2>
+      <table>
+        <tr><th>Approach</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td><strong>Your own script (this book)</strong></td><td>A list of cases, a loop, a printed score</td><td>Fifty lines. Runs in CI like any test.</td></tr>
+        <tr><td>Eval libraries</td><td>Ragas · DeepEval · promptfoo · Inspect</td><td>Ready-made metrics (faithfulness, answer relevance, retrieval precision) and judge prompts.</td></tr>
+        <tr><td>Platforms</td><td>LangSmith · Langfuse · Braintrust · Arize Phoenix</td><td>Store runs, compare versions side by side, collect human labels. Often the same tool as monitoring (chapter 19).</td></tr>
+      </table>
+      <p class="caption">Names you will meet for metrics: <em>precision and recall at k</em> for retrieval,
+        <em>faithfulness</em> or <em>groundedness</em> for "supported by the context", <em>answer relevance</em>
+        for "answers the question".</p>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow reliability">In the docs assistant</p>
+      <h2>Two graders in forty lines</h2>
+      <pre class="code"><code>def passes_checks(answer: str, phrase: str | None, document: str | None) -> bool:
+    """The cheap eval: plain string checks."""
+    if phrase is None:                                   # the handbook has no answer: it must say so
+        return "don't know" in answer.lower() or "do not know" in answer.lower()
+    return phrase.lower() in answer.lower() and document.lower() in answer.lower()
+
+class Verdict(BaseModel):
+    reason: str = Field(description="One sentence: which claim is or is not supported.")   # reason first
+    supported: bool = Field(description="True only if every claim in the answer is stated in the passages.")
+
+JUDGE_SYSTEM = (
+    "You check an assistant's answer against the passages it was given.\n"
+    "The answer is supported only if every factual claim in it is stated in the passages.\n"
+    'An answer that says it does not know is supported. Ignore the "source" part of the answer.'
+)
+
+def judge(passages: str, answer: str) -> Verdict:
+    model = llm.bind_tools([Verdict], tool_choice="required")
+    reply = model.invoke([("system", JUDGE_SYSTEM), ("human", f"Passages:\n{passages}\n\nAnswer:\n{answer}")])
+    return Verdict.model_validate(reply.tool_calls[0]["args"])</code></pre>
+      <div class="callout try">
+        <p><strong>Try it.</strong> With a model key set, run
+          <code>uv run python app/reliability.py evals</code> twice and compare the two scores. Then
+          fix the false alarm: make <code>passes_checks</code> accept "do not mention" as a refusal, and think
+          about what that loosening might now let through.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow reliability">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-3" data-sections="Exact Evaluation|AI as a Judge">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 3 · Evaluation Methodology</strong>
+          <span class="ref-sections">Exact Evaluation · AI as a Judge</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-4" data-sections="Evaluation Criteria|Design Your Evaluation Pipeline">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 4 · Evaluate AI Systems</strong>
+          <span class="ref-sections">Evaluation Criteria · Design Your Evaluation Pipeline</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-10" data-sections="What Are We Even Testing?|Offline Evaluation|Example Suites|Evaluating Solutions|SOMA Assessment|Online Evaluation">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 10 · Evaluating LLM Applications</strong>
+          <span class="ref-sections">What Are We Even Testing? · Offline Evaluation · Example Suites · Evaluating Solutions · SOMA Assessment · Online Evaluation</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-8" data-sections="Retrieval Evaluation Metrics|RAG Evaluation">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 8 · Semantic Search and Retrieval-Augmented Generation</strong>
+          <span class="ref-sections">Retrieval Evaluation Metrics · RAG Evaluation</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-HOLLM" data-ref="HOLLM-12" data-sections="Evaluating Generative Models">
+          <span class="ref-book">Hands-On Large Language Models</span>
+          <strong>Ch. 12 · Fine-Tuning Generation Models</strong>
+          <span class="ref-sections">Evaluating Generative Models</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>The two runs on this page are from <code>app/reliability.py evals</code> on 2026-11-22, a few minutes apart, on <code>nvidia/nemotron-3.5-lightning-30b-a3b</code>. The judge was the same model as the assistant; a stronger model usually makes a better judge.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

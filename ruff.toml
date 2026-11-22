@@ -1,0 +1,11 @@
+# Ruff: formatter + linter for the Python in this repository (the books' small apps and tools).
+#   uv run ruff format .        rewrite files in the house style
+#   uv run ruff check --fix .   lint, and auto-fix what's safe
+
+line-length = 120
+target-version = "py312"
+extend-exclude = ["*.md"]
+
+[lint]
+# E/W pycodestyle, F pyflakes, I import order, UP modern syntax, B common bugs
+select = ["E", "W", "F", "I", "UP", "B"]

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your build plan · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Part 5 · Designing the system · Chapter 24</p>
+    <h1>Your build plan</h1>
+    <p class="lead">The last chapter is about the first day. What to build, in what order, with which tools, and
+      how to use an AI coding assistant to get there quickly without losing track of what you built.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow">The problem</p>
+      <h2>Knowing the parts is not the same as starting</h2>
+      <p>You can now name every box in an AI architecture. The usual next mistake is to set them all up before
+        writing a line that answers a question: a vector database, a framework, a tracing platform, an agent.
+        Three weeks later there is infrastructure and no product. The way through is the opposite: something
+        working and measured on day one, and one improvement at a time after that.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow">The picture</p>
+      <h2>The order of work</h2>
+      <ol class="steps wide">
+        <li class="node reliability"><b>1. Ten cases</b><span>real inputs, the output you would accept</span></li>
+        <li class="node model"><b>2. One call</b><span>a prompt, a model, a score</span></li>
+        <li class="node retrieval"><b>3. Add the facts</b><span>retrieval or a lookup; score again</span></li>
+        <li class="node flow"><b>4. Fix the worst failure</b><span>one change, rerun, keep or undo</span></li>
+        <li class="node reliability"><b>5. Checks and a log</b><span>validate, limit, record</span></li>
+        <li class="node plain"><b>6. Three real users</b><span>their questions become new cases</span></li>
+      </ol>
+      <p class="caption">Step 1 comes before any prompt: evaluation-driven development (chapter 17). Steps 4 and 6 repeat for as long as the product lives. Everything in Parts 2 to 4 of
+        this book is something you might do at step 4, when a failure calls for it.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow">How it works</p>
+      <h2>A first project, in a weekend</h2>
+      <ol class="stepper wide">
+        <li><h4>First hour <small>the cases</small></h4><p><b>Do</b>Pick a small problem you actually have. Write ten inputs and, for each, what a good output is. Get one API key.</p><p><b>You have</b>An eval set. The hardest and most valuable hour.</p></li>
+        <li><h4>Second hour <small>the baseline</small></h4><p><b>Do</b>One file: a prompt, one model call, a loop over the ten cases, a printed score. Temperature 0, a cap on output tokens, a timeout.</p><p><b>You have</b>A baseline number, however bad.</p></li>
+        <li><h4>Rest of day one <small>the prompt</small></h4><p><b>Do</b>Read the failures. Add rules, a way out, the output format. If facts are missing, paste them in by hand to prove that facts are the problem.</p><p><b>You have</b>Knowledge of whether this is a prompt problem or a facts problem.</p></li>
+        <li><h4>Day two, morning <small>the facts</small></h4><p><b>Do</b>Split your documents, embed them, search, put the top chunks in the prompt. Or call the system that has the value. Print what was retrieved for every failure.</p><p><b>You have</b>A working RAG or tool-using app, with a score that moved.</p></li>
+        <li><h4>Day two, afternoon <small>the safety net</small></h4><p><b>Do</b>Validate the output in code. Log tokens and time per call. Add two cases that must be declined. Show it to someone.</p><p><b>You have</b>Something you can leave running and learn from.</p></li>
+      </ol>
+      <p>That is chapters 1, 2, 4, 5 and 17 of this book, and about a hundred lines of code. Vector databases,
+        rerankers, graphs, flows and agents come later, each when a failing case asks for it.</p>
+
+      <h3>Building it with an AI coding assistant</h3>
+      <p>Most code today is written with an AI assistant, and AI apps are no exception. It makes starting
+        fast. It also makes it easy to end up with a system you cannot explain. Some habits that keep the speed
+        and the understanding:</p>
+      <div class="cards wide">
+        <div class="card flow"><h4>Give it your ten cases first</h4><p>Ask for the eval script before the app. Then every later change is judged by a number, not by a confident summary.</p></div>
+        <div class="card flow"><h4>One step at a time</h4><p>"Add keyword search and show me the score before and after." A small system that fully works beats a large one that half works.</p></div>
+        <div class="card flow"><h4>Ask for plain code first</h4><p>No framework until you can say what it replaces. Assistants reach for abstractions freely; you are the one who debugs them.</p></div>
+        <div class="card flow"><h4>Read every prompt it writes</h4><p>The prompt is the behaviour of your app. It is the code that matters most and the easiest to skim past.</p></div>
+        <div class="card flow"><h4>Make it run things</h4><p>Library APIs here change every few months, and an assistant's knowledge is older than the libraries. Running beats describing.</p></div>
+        <div class="card flow"><h4>Ask "how would this fail?"</h4><p>It is good at inventing awkward inputs. Turn its answers into test cases.</p></div>
+      </div>
+      <div class="callout reliability">
+        <p><strong>A true example from this book,</strong> which was itself written with an AI assistant. For
+          chapter 16 the assistant first wrote the MCP server with class names from version 1 of the library.
+          Version 2 had renamed them, and the code failed on the first run. It was only caught because every
+          snippet was executed before it went on a page. The same assistant's first router prompt scored 5 out
+          of 8. Running and measuring is what turned plausible code into working code.</p>
+      </div>
+
+      <h3>The mistakes almost everyone makes once</h3>
+      <div class="qlist swap wide">
+        <div><span class="minus">No eval; judging by trying a few questions.</span><span class="plus">Ten cases and a score, from the first hour.</span></div>
+        <div><span class="minus">Blaming the model for a retrieval miss.</span><span class="plus">Print the retrieved chunks first.</span></div>
+        <div><span class="minus">Sending everything "to be safe".</span><span class="plus">Fewer, better chunks. More context is slower, dearer and often worse.</span></div>
+        <div><span class="minus">Starting with an agent.</span><span class="plus">A workflow; an agent for the one step that needs it.</span></div>
+        <div><span class="minus">Letting the model do arithmetic, comparisons or lookups.</span><span class="plus">Code does exact work; the model gets the result.</span></div>
+        <div><span class="minus">Trusting the output's structure.</span><span class="plus">Validate everything, like input from the internet.</span></div>
+        <div><span class="minus">Treating the prompt as a security control.</span><span class="plus">Permissions and checks in code.</span></div>
+        <div><span class="minus">The biggest model everywhere.</span><span class="plus">The smallest that passes the evals, per step.</span></div>
+        <div><span class="minus">Editing prompts in place with no version.</span><span class="plus">Prompts in files, in git, evaluated before they ship.</span></div>
+        <div><span class="minus">No timeout, no token cap, no spending alert.</span><span class="plus">All three, on day one.</span></div>
+      </div>
+
+      <h3>Five starter projects, one per shape</h3>
+      <div class="cards wide">
+        <div class="card retrieval"><span class="badge meaning">RAG</span><h4>Questions over your own notes or your team's wiki</h4><p class="eg"><b>You practise</b> chapters 4 to 9 and 17.</p></div>
+        <div class="card model"><span class="badge">Classification</span><h4>Sort incoming emails or tickets into categories, with a reason</h4><p class="eg"><b>You practise</b> chapters 1, 2 and 17.</p></div>
+        <div class="card model"><span class="badge">Extraction</span><h4>Pull the fields out of receipts or invoices</h4><p class="eg"><b>You practise</b> chapters 1, 17, 18 and 23.</p></div>
+        <div class="card flow"><span class="badge exact">Language to SQL</span><h4>Ask questions of a small database you own</h4><p class="eg"><b>You practise</b> chapters 12, 13, 18 and 23.</p></div>
+        <div class="card flow"><span class="badge exact">Tools, then an agent</span><h4>A helper that checks your calendar and drafts a reply</h4><p class="eg"><b>You practise</b> chapters 12, 13 and 16.</p></div>
+      </div>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow">Use it when, skip it when</p>
+      <h2>Are you ready to move on from the first version?</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Grow it when</h3>
+          <ul>
+            <li>The score has stopped improving with prompt changes, and the failures share a cause.</li>
+            <li>Real users are asking things your cases did not cover.</li>
+            <li>You can state the next box's job as "these failing cases will pass".</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Stay small when</h3>
+          <ul>
+            <li>It works for the people using it. Finished is allowed.</li>
+            <li>You are adding something because an article said every serious system has one.</li>
+            <li>You have not yet looked at the failures you already have.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow">The tools</p>
+      <h2>A starter kit that costs nothing</h2>
+      <table>
+        <tr><th>Need</th><th>Start with</th><th>Note</th></tr>
+        <tr><td>A model</td><td>Any provider with a free tier, or Ollama on your own machine</td><td>Small models are enough to learn everything in this book.</td></tr>
+        <tr><td>Project and packages</td><td><code>uv</code></td><td>Creates the project and a lock file, like Bundler or Go modules.</td></tr>
+        <tr><td>Model client</td><td><code>langchain</code> plus one provider package</td><td>Or the provider's own SDK.</td></tr>
+        <tr><td>Embeddings and reranking</td><td><code>fastembed</code></td><td>Runs on a laptop CPU, no key.</td></tr>
+        <tr><td>Vector search</td><td><code>qdrant-client</code> with <code>":memory:"</code></td><td>No server until you need one.</td></tr>
+        <tr><td>Keyword search</td><td><code>rank-bm25</code></td><td>In memory.</td></tr>
+        <tr><td>Flows, later</td><td><code>langgraph</code></td><td>When a plain function stops being enough.</td></tr>
+        <tr><td>Graph, later</td><td><code>neo4j</code> and one Docker container</td><td>When questions are about connections.</td></tr>
+      </table>
+      <p class="caption">These are the packages the book's app runs on. Everything except the model runs
+        locally, offline, for free.</p>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow">In the docs assistant</p>
+      <h2>Use the book's app as your starting point</h2>
+      <p>The fastest first project is to make the docs assistant answer questions about <em>your</em> documents:</p>
+      <ol>
+        <li>Copy the <code>app</code> folder.</li>
+        <li>Replace <code>handbook.md</code> with your own text: a heading per document, a paragraph per idea.</li>
+        <li>Replace the <code>EVAL</code> list in <code>assistant.py</code> with ten questions of yours and the number of the paragraph that answers each.</li>
+        <li>Run <code>uv run python app/assistant.py --eval</code>. That is your scoreboard.</li>
+        <li>Run <code>--explain</code> on each question that fails, and start at step 4 of the picture above.</li>
+      </ol>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Today, not next week: do the first hour. Ten inputs, ten good outputs, in a
+          file. Everything else in this book is a way of making that score go up.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-1" data-sections="Planning AI Applications|Setting Expectations|Milestone Planning">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 1 · Introduction to Building AI Applications with Foundation Models</strong>
+          <span class="ref-sections">Planning AI Applications · Setting Expectations · Milestone Planning</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>The observation in <cite>AI Engineering</cite> ch. 1 that the first demo is quick and the last stretch to production quality is long is worth reading before you promise a date.</li>
+          <li>Which book next: <cite>Prompt Engineering for LLMs</cite> if your failures are in prompts and context; <cite>Hands-On Large Language Models</cite> if you want to see inside embeddings, search and the models themselves, with code; <cite>AI Engineering</cite> for evaluation, architecture and running a system in production.</li>
+          <li>The weekend plan, the habits for working with a coding assistant and the list of mistakes are this book's own advice, drawn from what happened while its app was built (see <code>notes/</code>). They are not taken from the three books.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

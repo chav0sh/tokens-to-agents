@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangGraph · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow flow">Part 3 · Building the flow · Chapter 15</p>
+    <h1>LangGraph</h1>
+    <p class="lead">LangGraph is a library for writing a flow as a graph: steps are nodes, the paths between
+      them are edges, and one shared state travels through. It is a state machine with the plumbing an AI app
+      needs: saved progress, loops, pauses for a person, and a picture of where a run went.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow flow">The problem</p>
+      <h2>If/else works, until the flow has to wait or retry</h2>
+      <p>Chapter 13's workflow was a plain function, and for a straight path that is the right tool. It starts
+        to hurt when the flow needs any of these:</p>
+      <table>
+        <tr><th>Need</th><th>In a plain function</th></tr>
+        <tr><td>Retry one step when a check fails, at most three times.</td><td>Nested loops and counters around your logic.</td></tr>
+        <tr><td>Stop before a risky step and wait for a person to approve it, perhaps for a day.</td><td>The function cannot pause. You save everything by hand and write code to pick it up again.</td></tr>
+        <tr><td>Continue a conversation tomorrow.</td><td>You build your own storage for what was said and decided.</td></tr>
+        <tr><td>See which path a run took, and resume one that crashed halfway.</td><td>Logging you add yourself, and no resume.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow flow">The picture</p>
+      <h2>The docs assistant as a graph</h2>
+      <figure class="canvas" aria-label="The docs assistant as a LangGraph graph: START, route, then refuse or retrieve; retrieve goes to holiday or answer; answer and refuse go to END">
+        <script type="application/json">{"cols": 4, "nodes": [
+          {"id": "start", "col": 1, "row": 1, "icon": "bolt", "title": "START", "kind": "plain", "shape": "end"},
+          {"id": "route", "col": 2, "row": 1, "icon": "route", "title": "route", "kind": "model", "sub": "what kind of question?"},
+          {"id": "retrieve", "col": 3, "row": 1, "icon": "search", "title": "retrieve", "kind": "retrieval", "sub": "search the handbook"},
+          {"id": "holiday", "col": 4, "row": 1, "icon": "clock", "title": "holiday", "kind": "flow", "sub": "look up and compare"},
+          {"id": "refuse", "col": 2, "row": 2, "icon": "alert", "title": "refuse", "kind": "flow"},
+          {"id": "answer", "col": 3, "row": 2, "icon": "spark", "title": "answer", "kind": "model", "sub": "write it"},
+          {"id": "end", "col": 2, "row": 3, "icon": "check", "title": "END", "kind": "plain", "shape": "end"}
+        ], "edges": [{"from": "start", "to": "route"}, {"from": "route", "to": "retrieve", "type": "alt"}, {"from": "route", "to": "refuse", "label": "other", "type": "alt"}, {"from": "retrieve", "to": "holiday", "type": "alt"}, {"from": "retrieve", "to": "answer", "label": "policy", "type": "alt"}, {"from": "holiday", "to": "answer", "via": "down"}, {"from": "answer", "to": "end", "via": "down"}, {"from": "refuse", "to": "end"}]}</script>
+      </figure>
+      <p class="caption">The same five steps as chapter 13's workflow. Solid arrows always run; dotted arrows
+        are decided at run time by a small function that reads the state. LangGraph can draw this picture from
+        the code.</p>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow flow">How it works</p>
+      <h2>State, nodes, edges</h2>
+      <table>
+        <tr><th>Piece</th><th>What it is</th><th>Like</th></tr>
+        <tr><td><strong>State</strong></td><td>One typed dictionary for the whole run: the question, what was found, the answer. Every node can read all of it.</td><td>The request context passed down a middleware chain.</td></tr>
+        <tr><td><strong>Node</strong></td><td>A function. It receives the state and returns only the keys it wants to change.</td><td>One middleware, or a reducer.</td></tr>
+        <tr><td><strong>Edge</strong></td><td>"After this node, run that one."</td><td>A transition in a state machine.</td></tr>
+        <tr><td><strong>Conditional edge</strong></td><td>A function that looks at the state and returns the name of the next node.</td><td>A router.</td></tr>
+        <tr><td><strong>Checkpointer</strong></td><td>Saves the state after every node, under a conversation ID.</td><td>A session store, written after each step.</td></tr>
+      </table>
+
+      <h3>A node returns only what changed</h3>
+      <pre class="code"><code>class State(TypedDict, total=False):
+    question: str
+    kind: str              # policy, my_holiday or other
+    employee: str
+    days_requested: int
+    passages: str
+    answer: str
+    history: list[str]     # earlier questions and answers of this conversation
+
+def retrieve_node(state: State) -> State:
+    return {"passages": search_handbook.invoke({"question": state["question"]})}   # one key; the rest is kept
+
+def after_retrieve(state: State) -> str:
+    return "holiday" if state["kind"] == "my_holiday" else "answer"               # the name of the next node</code></pre>
+      <p>LangGraph merges each node's return value into the state and then follows the edges. Your functions
+        never call each other, which is what lets the library stop between them, save, and resume.</p>
+
+      <h3>What the checkpointer buys you</h3>
+      <table>
+        <tr><th>Feature</th><th>How it follows from saved state</th></tr>
+        <tr><td><strong>Conversations</strong></td><td>Call the graph again with the same ID and it starts from the saved state: the history is there. Chapter 16 uses this.</td></tr>
+        <tr><td><strong>Human in the loop</strong></td><td>A node can interrupt the run. The state waits in storage until someone approves, minutes or days later, then the run continues from that node.</td></tr>
+        <tr><td><strong>Resume after a crash</strong></td><td>Restart from the last saved node instead of repeating model calls you already paid for.</td></tr>
+        <tr><td><strong>Inspection</strong></td><td>The saved states are a step-by-step record of the run.</td></tr>
+      </table>
+
+      <h3>Loops are just edges that point backwards</h3>
+      <p>The evaluator loop from chapter 13 is one conditional edge: after a <code>check</code> node, go back
+        to <code>answer</code> if the check failed and fewer than three attempts were made, otherwise go to
+        <code>END</code>. The attempt counter lives in the state. An agent is the same shape: a model node and a
+        tools node with an edge in each direction.</p>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow flow">Use it when, skip it when</p>
+      <h2>When a graph earns its place</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Use LangGraph when</h3>
+          <ul>
+            <li>The flow has branches and loops you want to see and test as separate steps.</li>
+            <li>Runs must pause for a person, or continue across requests.</li>
+            <li>You need conversations with saved state and do not want to build that storage.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip it when</h3>
+          <ul>
+            <li>The flow is a straight line of two or three calls. A function is clearer.</li>
+            <li>It is a batch job with no conversation and no pauses.</li>
+            <li>You already run a workflow engine (Temporal, a job queue with retries) that gives you durability. Use that for the long-running part.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow flow">The tools</p>
+      <h2>The names in this slot</h2>
+      <table>
+        <tr><th>Piece</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Graph library</td><td><strong>LangGraph (this book)</strong></td><td>Works with any model code inside the nodes; LangChain is not required.</td></tr>
+        <tr><td>Where state is saved</td><td><code>InMemorySaver</code> (tests) · SQLite and Postgres savers (production)</td><td>The in-memory one forgets everything when the process stops.</td></tr>
+        <tr><td>Other flow tools</td><td>LlamaIndex Workflows · the agent frameworks from chapter 13 · general workflow engines such as Temporal</td><td>Different shapes for the same need: steps, state, retries.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow flow">In the docs assistant</p>
+      <h2>The workflow becomes a graph</h2>
+      <pre class="code"><code>from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, StateGraph
+
+graph = StateGraph(State)
+graph.add_node("route", route_node)
+graph.add_node("retrieve", retrieve_node)
+graph.add_node("holiday", holiday_node)
+graph.add_node("answer", answer_node)
+graph.add_node("refuse", refuse_node)
+
+graph.add_edge(START, "route")
+graph.add_conditional_edges("route", after_route, ["retrieve", "refuse"])       # decided at run time
+graph.add_conditional_edges("retrieve", after_retrieve, ["holiday", "answer"])
+graph.add_edge("holiday", "answer")
+graph.add_edge("answer", END)
+graph.add_edge("refuse", END)
+
+app = graph.compile(checkpointer=InMemorySaver())      # save the state after every node
+
+result = app.invoke(
+    {"question": "I'm Maria Lind. I want to take 10 days off next month. Do I have enough holiday left?"},
+    {"configurable": {"thread_id": "maria-1"}},        # the conversation this run belongs to
+)
+print(result["answer"])</code></pre>
+      <div class="out-box">You have 7 holiday days left, which is not enough for 10 days. [Holiday policy]</div>
+      <p>The node functions are the same code as in chapter 13, cut at the step boundaries. What changed is that
+        the wiring is now data: it can be drawn, and each node can be tested by handing it a state.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> In <code>app/agent.py</code>, add a <code>check</code> node after
+          <code>answer</code> that verifies the answer names a document, and an edge back to <code>answer</code>
+          when it does not, with an attempt limit. That is the evaluator loop.</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow flow">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="Planning|Complex plans">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">Planning · Complex plans</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-9" data-sections="Assembling the Workflow|Stateful Task Agents">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 9 · LLM Workflows</strong>
+          <span class="ref-sections">Assembling the Workflow · Stateful Task Agents</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li><strong>None of the three books covers LangGraph.</strong> The cards above hold the ideas it implements: plans with branches and loops, and workflows with state.</li>
+          <li>LangGraph's own documentation: the graph API (state, nodes, edges), persistence, and human-in-the-loop.</li>
+          <li>The code was run on 2026-11-22 with langgraph 1.2.20 (<code>app/agent.py</code>). The interrupt and crash-resume features in the table are described from the documentation and were not run here.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Case study: the voting assistant · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Extras · A second app</p>
+    <h1>Case study: the voting assistant</h1>
+    <p class="lead">Consider a second, larger app built from the same patterns.
+      It reads a shareholder voting policy and a company's annual meeting agenda, and recommends a vote on each
+      item, naming the policy rule it applied. This page takes it apart: what it is for, what it is made of,
+      and how one vote travels through it.</p>
+
+    <section>
+      <h2>How it helps someone vote</h2>
+      <p>An investor who owns shares in many companies has a vote at each one's annual general meeting (AGM).
+        Every agenda has ten to twenty items: electing directors, approving the dividend, pay programmes,
+        shareholder proposals. Most investors have a written <strong>voting policy</strong> that says how to
+        vote in each situation. Applying it means reading every item of every agenda against every rule, in the
+        few weeks when all the meetings happen at once.</p>
+      <div class="cards wide">
+        <div class="card retrieval"><span class="kind">What you give it</span><h4>A policy and an agenda</h4><p>The policy: numbered rules such as "vote AGAINST directors who sit on more than 4 public boards". The agenda: the items of one meeting, each a title and a short text.</p></div>
+        <div class="card model"><span class="kind">What you get back</span><h4>A vote, a rule, a reason</h4><p>For every item: FOR, AGAINST or ABSTAIN, the ID of the one rule that decided it, and one sentence naming the fact that mattered.</p></div>
+        <div class="card reliability"><span class="kind">What stays with you</span><h4>The decision</h4><p>It recommends; a person reviews and votes. Because every recommendation cites its rule, checking one takes seconds instead of a re-read of the policy.</p></div>
+      </div>
+      <div class="use-skip wide">
+        <div><h3>What it is good for</h3><ul><li><strong>Speed:</strong> a whole agenda in the time it takes to read one item.</li><li><strong>Consistency:</strong> the same rule is applied the same way at every company.</li><li><strong>Traceability:</strong> each vote points at a rule, so "why did we vote against?" always has an answer.</li><li><strong>Catching what is not in the text:</strong> a director's other board seats come from a database, not from the agenda.</li></ul></div>
+        <div><h3>What it does not do</h3><ul><li>It does not vote. A person decides.</li><li>It knows only its policy. A situation no rule covers gets the nearest rule, which may be wrong.</li><li>It trusts the agenda's facts and the board data it was given.</li><li>It is a small learning project on made-up data: 11 rules, 3 sample agendas, 4 directors. Not advice.</li></ul></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>One agenda, voted</h2>
+      <p>The sample agenda is the annual meeting of a made-up company, Nordhavn Industries, with ten items. These are the votes the policy requires, and
+        the assistant gets all ten, with the right rule each time.</p>
+      <table>
+        <tr><th>#</th><th>Agenda item</th><th>Vote</th><th>Rule</th><th>The fact that decided it</th></tr>
+        <tr><td>1</td><td>Election of chair of the meeting</td><td><span class="badge meaning">FOR</span></td><td>1.1</td><td>A routine procedural item.</td></tr>
+        <tr><td>2</td><td>Adoption of the income statement and balance sheet</td><td><span class="badge meaning">FOR</span></td><td>2.1</td><td>The auditor's report is unqualified.</td></tr>
+        <tr><td>3</td><td>Dividend of SEK 18.00 per share</td><td><span class="badge stop">AGAINST</span></td><td>2.2</td><td>Net profit was SEK 15.20 per share: the dividend is larger.</td></tr>
+        <tr><td>4</td><td>Discharge from liability for the board and CEO</td><td><span class="badge stop">AGAINST</span></td><td>6.1</td><td>The financial regulator has an open case against the company.</td></tr>
+        <tr><td>5</td><td>Elect Erik Lund as director</td><td><span class="badge stop">AGAINST</span></td><td>3.4</td><td>The nominee is a PEP (politically exposed person).</td></tr>
+        <tr><td>6</td><td>Elect Karin Sjöberg as director</td><td><span class="badge stop">AGAINST</span></td><td>3.3</td><td>She attended 7 of 12 board meetings: 58%, under the 75% the rule asks for.</td></tr>
+        <tr class="you"><td>7</td><td>Elect Anna Berg as director</td><td><span class="badge stop">AGAINST</span></td><td>3.2</td><td>She sits on 5 public boards. <strong>The agenda does not say so.</strong></td></tr>
+        <tr><td>8</td><td>Elect Johan Ek as director</td><td><span class="badge meaning">FOR</span></td><td>3.1</td><td>He sits on exactly 4 boards, which is not "more than 4".</td></tr>
+        <tr><td>9</td><td>Long-term incentive programme</td><td><span class="badge stop">AGAINST</span></td><td>4.1</td><td>Shares vest after two years, with no performance conditions.</td></tr>
+        <tr><td>10</td><td>Shareholder proposal: a company museum</td><td><span class="badge none">ABSTAIN</span></td><td>7.1</td><td>A local, cultural project unrelated to the business.</td></tr>
+      </table>
+      <p class="caption">3 FOR, 6 AGAINST, 1 ABSTAIN. The data was designed so that each item needs something
+        different from the system: item 5 an exact keyword, item 7 a fact from a graph, item 8 a careful
+        reading of a number.</p>
+    </section>
+
+    <section>
+      <h2>One vote, through the system</h2>
+      <p>Item 7 is the instructive one. The agenda says Anna Berg is independent and attended 11 of 12 meetings.
+        On the text alone she should be elected. Here is what happens instead.</p>
+      <ol class="stepper wide">
+        <li><h4>Retrieve the rules <small>Qdrant + BM25</small></h4><p><b>Does</b>Searches the 11 policy rules with the item's title and text, by meaning and by exact words, and keeps the best three.</p><p><b>Gives</b>The rules about electing directors, with their IDs.</p></li>
+        <li><h4>Look up graph facts <small>Neo4j</small></h4><p><b>Does</b>Sees that the title is "Elect … as director", takes the name, and asks the graph how many companies she sits on the board of.</p><p><b>Gives</b>One line: "Anna Berg sits on 5 public boards."</p></li>
+        <li><h4>Recommend <small>the model</small></h4><p><b>Does</b>Reads the three rules, the item and the fact, each in its own tagged block, and follows a numbered procedure: find the one rule that decides, apply it exactly.</p><p><b>Gives</b>A reason, then rule 3.2, then the vote: AGAINST.</p></li>
+        <li><h4>Check the citation <small>plain code</small></h4><p><b>Does</b>Confirms that the rule the model cited is one of the three it was shown. If not, the model is asked once more, with the allowed IDs listed.</p><p><b>Gives</b>A recommendation whose rule was checked against the three shown. If the second try also fails, the answer is kept but the run log marks it as not verified.</p></li>
+      </ol>
+      <div class="callout graphdb">
+        <p><strong>No search could have found this.</strong> "5 public boards" is written nowhere. It is a count
+          of connections between a person and companies, so it lives in a graph, and a query produces it. That
+          is the whole of <a href="11-graphrag.html">chapter 11</a> in one agenda item.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>The whole system in one chart</h2>
+      <p>Three layers. You only ever touch the top one. The middle one runs once for every item on the agenda.
+        The bottom one is where the rules, the board seats and the model live.</p>
+      <div class="figure wide">
+        <svg viewBox="0 0 980 556" role="img" aria-label="Flowchart of the voting assistant: the interface on top, the four engine steps in the middle, and the databases and services each step uses at the bottom">
+          <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+
+          <!-- lanes -->
+          <rect class="lane" x="10" y="10" width="960" height="118" rx="18"/><text class="lane-title" x="30" y="38">INTERFACE</text><text class="muted" x="126" y="38">a web app behind a sign-in</text>
+          <rect class="lane" x="10" y="160" width="960" height="170" rx="18"/><text class="lane-title" x="30" y="188">ENGINE</text><text class="muted" x="480" y="188" text-anchor="middle">one flow, run once for every agenda item</text>
+          <rect class="lane" x="10" y="366" width="960" height="180" rx="18"/><text class="lane-title" x="950" y="394" text-anchor="end">DATABASES AND SERVICES</text>
+
+          <!-- interface -->
+          <g class="plain"><rect class="box" x="40" y="58" width="260" height="50" rx="12"/><text class="t" x="170" y="80" text-anchor="middle">You pick an agenda</text><text class="s" x="170" y="97" text-anchor="middle">and press Run</text></g>
+          <g class="plain"><rect class="box" x="680" y="58" width="260" height="50" rx="12"/><text class="t" x="810" y="80" text-anchor="middle">A table of votes</text><text class="s" x="810" y="97" text-anchor="middle">click a row to see the rule and the reason</text></g>
+
+          <!-- engine -->
+          <g class="retrieval"><rect class="box" x="40" y="226" width="190" height="62" rx="12"/><text class="t" x="135" y="252" text-anchor="middle">1  Retrieve rules</text><text class="s" x="135" y="271" text-anchor="middle">the 3 that fit this item best</text></g>
+          <g class="graphdb"><rect class="box" x="270" y="226" width="190" height="62" rx="12"/><text class="t" x="365" y="252" text-anchor="middle">2  Graph facts</text><text class="s" x="365" y="271" text-anchor="middle">how many boards?</text></g>
+          <g class="model"><rect class="box" x="500" y="226" width="190" height="62" rx="12"/><text class="t" x="595" y="252" text-anchor="middle">3  Recommend</text><text class="s" x="595" y="271" text-anchor="middle">reason, rule, vote</text></g>
+          <g class="reliability"><rect class="box" x="730" y="226" width="210" height="62" rx="12"/><text class="t" x="835" y="252" text-anchor="middle">4  Check the citation</text><text class="s" x="835" y="271" text-anchor="middle">is the rule one of the 3 shown?</text></g>
+
+          <!-- main path -->
+          <path class="flowline" marker-end="url(#arrow)" d="M135 108 V224"/><text class="s" x="145" y="150">each item</text>
+          <path class="flowline" marker-end="url(#arrow)" d="M230 257 H268"/>
+          <path class="flowline" marker-end="url(#arrow)" d="M460 257 H498"/>
+          <path class="flowline" marker-end="url(#arrow)" d="M690 257 H728"/>
+          <path class="flowline" marker-end="url(#arrow)" d="M835 226 V110"/><text class="s" x="845" y="150">yes</text>
+          <!-- retry loop -->
+          <path class="retry" marker-end="url(#arrow)" d="M800 288 C 800 312, 620 312, 620 290"/><text class="s" x="710" y="323" text-anchor="middle">no: ask once more</text>
+
+          <!-- stores -->
+          <g class="retrieval"><rect class="box" x="30" y="430" width="110" height="62" rx="12"/><text class="t" x="85" y="456" text-anchor="middle">Qdrant</text><text class="s" x="85" y="475" text-anchor="middle">rule vectors</text></g>
+          <g class="retrieval"><rect class="box" x="150" y="430" width="110" height="62" rx="12"/><text class="t" x="205" y="456" text-anchor="middle">BM25</text><text class="s" x="205" y="475" text-anchor="middle">keyword index</text></g>
+          <g class="graphdb"><rect class="box" x="290" y="430" width="150" height="62" rx="12"/><text class="t" x="365" y="456" text-anchor="middle">Neo4j</text><text class="s" x="365" y="475" text-anchor="middle">directors and boards</text></g>
+          <g class="model"><rect class="box" x="480" y="430" width="120" height="62" rx="12"/><text class="t" x="540" y="456" text-anchor="middle">Model API</text><text class="s" x="540" y="475" text-anchor="middle">a hosted LLM</text></g>
+          <g class="reliability"><rect class="box" x="612" y="430" width="120" height="62" rx="12"/><text class="t" x="672" y="456" text-anchor="middle">Run log</text><text class="s" x="672" y="475" text-anchor="middle">SQLite</text></g>
+          <g class="plain"><rect class="box" x="770" y="430" width="170" height="62" rx="12"/><text class="t" x="855" y="456" text-anchor="middle">No service</text><text class="s" x="855" y="475" text-anchor="middle">step 4 is plain code</text></g>
+
+          <!-- step to store -->
+          <path class="uses" marker-end="url(#arrow)" marker-start="url(#arrow)" d="M110 290 L88 428"/>
+          <path class="uses" marker-end="url(#arrow)" marker-start="url(#arrow)" d="M160 290 L200 428"/>
+          <path class="uses" marker-end="url(#arrow)" marker-start="url(#arrow)" d="M365 290 V428"/><text class="s" x="375" y="352">only for "Elect … as director"</text>
+          <path class="uses" marker-end="url(#arrow)" marker-start="url(#arrow)" d="M570 290 L545 428"/>
+          <path class="uses" marker-end="url(#arrow)" d="M615 290 L668 428"/><text class="s" x="655" y="352">every call recorded</text>
+
+          <!-- where the stores get their data -->
+          <text class="s" x="145" y="520" text-anchor="middle">built from the policy file when the app starts</text>
+          <text class="s" x="365" y="520" text-anchor="middle">loaded from the board list</text>
+          <text class="s" x="540" y="520" text-anchor="middle">versioned prompt file</text>
+          <text class="s" x="672" y="520" text-anchor="middle">the Runs page</text>
+        </svg>
+        <ul class="legend"><li class="retrieval">Finding the rules</li><li class="graphdb">Graph</li><li class="model">The model</li><li class="reliability">Checks and records</li></ul>
+      </div>
+      <p class="caption">Solid arrows are the path of one agenda item. Dashed arrows are a step asking a database
+        or service and getting an answer back. An agenda of ten items goes round the middle layer ten times.</p>
+    </section>
+
+    <section>
+      <h2>Does every input use everything?</h2>
+      <p>Almost. This app is a <strong>fixed pipeline</strong>: every item goes through the same four steps in
+        the same order, and no model decides what to run. Two things do depend on the input.</p>
+      <table class="matrix">
+        <tr><th></th><th>Qdrant</th><th>BM25</th><th>Neo4j</th><th>Model</th><th>Citation check</th><th>Second model call</th><th>Run log</th></tr>
+        <tr><td>Item 1: election of the chair</td><td class="on">●</td><td class="on">●</td><td></td><td class="on">●</td><td class="on">●</td><td></td><td class="on">●</td></tr>
+        <tr><td>Item 3: the dividend</td><td class="on">●</td><td class="on">●</td><td></td><td class="on">●</td><td class="on">●</td><td></td><td class="on">●</td></tr>
+        <tr><td>Item 5: elect Erik Lund</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td></td><td class="on">●</td></tr>
+        <tr><td>Item 7: elect Anna Berg</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td></td><td class="on">●</td></tr>
+        <tr><td>Any item where the model cites a rule it was not shown</td><td class="on">●</td><td class="on">●</td><td class="some">if a director</td><td class="on">●</td><td class="on">●</td><td class="on">●</td><td class="on">●</td></tr>
+      </table>
+      <div class="cards two wide">
+        <div class="card graphdb"><span class="kind">Depends on the input</span><h4>The graph is asked only about directors</h4><p>The code looks at the title. "Elect … as director" triggers the Neo4j query; any other item gets the fact "None." and Neo4j is not touched.</p><p class="eg"><b>Example.</b> Erik Lund is looked up too (2 boards), but his vote is decided by the word "PEP" in the agenda, which keyword search matched to rule 3.4.</p></div>
+        <div class="card reliability"><span class="kind">Depends on the model's answer</span><h4>The retry runs only after a bad citation</h4><p>If the cited rule is not one of the three shown, the model is asked once more with the allowed IDs. At most two attempts, then the flow stops.</p><p class="eg"><b>In practice.</b> On the ten test items the first answer passed every time: zero retries recorded.</p></div>
+      </div>
+      <p>What changes most from item to item is not <em>which</em> parts run but <em>what they return</em>: a
+        different three rules from the search, a different fact from the graph, and so a different prompt.</p>
+
+      <h3>Three ways an app can decide what runs</h3>
+      <div class="cards wide">
+        <div class="card retrieval"><span class="badge meaning">Fixed pipeline</span><h4>The voting assistant</h4><p>Every input is the same kind of thing, an agenda item, so every input takes the same path. Predictable cost, and nothing can be skipped.</p></div>
+        <div class="card flow"><span class="badge exact">Routed workflow</span><h4>This book's docs assistant</h4><p>Inputs are free questions, so a router sorts them first. A policy question uses the handbook search; a holiday question adds the HR lookup; anything else is refused after one model call, with no search at all.</p></div>
+        <div class="card reliability"><span class="badge stop">Agent</span><h4>A coding or helpdesk assistant</h4><p>The model picks each next step from its tools. Two requests can use completely different parts, in a different order, a different number of times.</p></div>
+      </div>
+      <p class="caption">The three shapes are compared in <a href="13-workflows-and-agents.html">chapter 13</a>.
+        Choose the simplest one your inputs allow.</p>
+    </section>
+
+    <section>
+      <h2>The system, in short</h2>
+      <div class="map wide">
+        <div class="band"><h3>The voting assistant <small>a fixed workflow: every item takes the same path</small></h3>
+          <ol class="steps">
+            <li class="node plain"><b>Agenda item</b></li>
+            <li class="node retrieval"><b>Retrieve rules</b><span>Qdrant + BM25, fused</span></li>
+            <li class="node graphdb"><b>Graph facts</b><span>board seats, from Neo4j</span></li>
+            <li class="node model"><b>Recommend</b><span>reason, rule, vote</span></li>
+            <li class="node reliability"><b>Check the citation</b><span>retry once if wrong</span></li>
+            <li class="node plain"><b>Vote, rule, reason</b></li>
+          </ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>A web app behind a sign-in. Pick an agenda, press run, get a table of votes; click a row to see why. A history of earlier runs per agenda.</dd></div>
+            <div><dt>Tools</dt><dd>None that the model chooses. The search and the graph lookup are called by code for every item, so they cannot be skipped.</dd></div>
+            <div><dt>Database</dt><dd>Policy rules in Qdrant, board seats in Neo4j, every model call in a small SQLite run log.</dd></div>
+            <div><dt>Qdrant or Neo4j?</dt><dd><span class="badge meaning">Qdrant</span> <span class="badge graph">+ Neo4j</span> The text gives the rule; the graph gives the fact the rule needs.</dd></div>
+          </dl></div>
+      </div>
+      <p>In the terms of <a href="compare.html#systems">Compare and combine</a>, it is system 8, the knowledge
+        assistant that needs both stores, built as a pipeline rather than a chat.</p>
+    </section>
+
+    <section>
+      <h2>Every part, and what it does here</h2>
+      <h3>Finding the rules</h3>
+      <div class="cards wide">
+        <div class="card plain"><span class="kind">Data</span><h4>The policy file</h4><p>A markdown file of 11 numbered rules. Each rule is one chunk and carries its ID, so whatever the search returns can be cited.</p><a class="more" href="09-chunking.html">Chapter 9 →</a></div>
+        <div class="card model"><span class="kind">Embedding model</span><h4>fastembed</h4><p>Turns each rule, and each agenda item, into 384 numbers on the local CPU. No API key, and the policy never leaves the machine.</p><a class="more" href="05-embeddings.html">Chapter 5 →</a></div>
+        <div class="card retrieval"><span class="kind">Vector database</span><h4>Qdrant</h4><p>Holds the 11 rule vectors and returns the three nearest in meaning. Only policy rules are indexed: agenda text is searched <em>with</em>, never stored.</p><a class="more" href="06-vector-databases.html">Chapter 6 →</a></div>
+        <div class="card retrieval"><span class="kind">Keyword index</span><h4>rank-bm25</h4><p>Finds rules that share the item's rare words. It is what catches "PEP" in item 5, which the vector search missed.</p><a class="more" href="07-keyword-search.html">Chapter 7 →</a></div>
+        <div class="card retrieval"><span class="kind">Fusion</span><h4>Reciprocal rank fusion</h4><p>Merges the top three by meaning with the top three by words and keeps the best three overall. No reranker: with 11 rules, three candidates are enough.</p><a class="more" href="08-hybrid-search.html">Chapter 8 →</a></div>
+      </div>
+      <h3>Finding the facts</h3>
+      <div class="cards wide">
+        <div class="card graphdb"><span class="kind">Graph database</span><h4>Neo4j</h4><p>Stores directors, companies, and a SITS_ON link between them. One Cypher query counts a nominee's boards. The name goes in as a parameter, never into the query text.</p><a class="more" href="10-graph-databases.html">Chapter 10 →</a></div>
+        <div class="card graphdb"><span class="kind">Pattern</span><h4>A resolved fact, not raw data</h4><p>The prompt gets "sits on 5 public boards", not a list of five companies to count. The database counts; the model reads.</p><a class="more" href="11-graphrag.html">Chapter 11 →</a></div>
+      </div>
+      <h3>Deciding, and checking</h3>
+      <div class="cards wide">
+        <div class="card model"><span class="kind">Model</span><h4>A small hosted model, through LangChain</h4><p>One function creates the chat model, and a setting picks the provider (Google or NVIDIA). The rest of the code does not know which one answers.</p><a class="more" href="03-choosing-a-model.html">Chapter 3 →</a></div>
+        <div class="card model"><span class="kind">Structured output</span><h4>Reason, rule, vote</h4><p>The answer must fit a schema: a short reason, one rule ID, and exactly FOR, AGAINST or ABSTAIN. The reason comes first, so the vote is written after the thinking.</p><a class="more" href="02-prompts.html">Chapter 2 →</a></div>
+        <div class="card flow"><span class="kind">Flow</span><h4>LangGraph</h4><p>Four nodes in a line (retrieve, graph facts, recommend, check) and one edge that loops back for a retry, with a hard limit of two attempts.</p><a class="more" href="15-langgraph.html">Chapter 15 →</a></div>
+        <div class="card reliability"><span class="kind">Guard</span><h4>The citation check</h4><p>Plain code after the model: the cited rule must be one of the three it was shown. The model's output is treated as untrusted.</p><a class="more" href="18-guardrails.html">Chapter 18 →</a></div>
+        <div class="card reliability"><span class="kind">Prompt</span><h4>Versioned prompt files</h4><p>The prompt is a file with a version number, never edited once evaluated. Version 2 puts rules, item and facts in tagged blocks, so agenda text cannot pose as an instruction.</p><a class="more" href="18-guardrails.html">Chapter 18 →</a></div>
+      </div>
+      <h3>Knowing it works</h3>
+      <div class="cards wide">
+        <div class="card reliability"><span class="kind">Evals</span><h4>Ten cases, two scores</h4><p>The ten sample items with their expected vote and rule. One command runs them and prints vote accuracy and rule accuracy.</p><a class="more" href="17-evals.html">Chapter 17 →</a></div>
+        <div class="card reliability"><span class="kind">Monitoring</span><h4>A run log in SQLite</h4><p>Every model call is recorded: tokens including thinking, duration, model, prompt version, errors. A page charts them per run.</p><a class="more" href="19-monitoring.html">Chapter 19 →</a></div>
+        <div class="card plain"><span class="kind">Interface</span><h4>Streamlit</h4><p>A Python library that turns scripts into web pages. It gives the app its sign-in, the recommendations table, the run charts and the prompt switch.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>How it got to ten out of ten</h2>
+      <p>One build of this design went in steps, each aimed at a case the step before got wrong. These are the
+        scores it reached on the ten items.</p>
+      <ol class="stepper wide">
+        <li><h4>A stub that always votes FOR <small>3/10</small></h4><p><b>Added</b>Nothing: the floor. Anything that scores no better has learned nothing.</p><p><b>Shows</b>Three of the ten items happen to be FOR.</p></li>
+        <li><h4>RAG with vector search <small>8/10</small></h4><p><b>Added</b>Embeddings, Qdrant, a prompt.</p><p><b>Still fails</b>Item 5: the rule with the exact term "PEP" is not retrieved. Item 7: the board count is in no text.</p></li>
+        <li><h4>Keyword search and rank fusion <small>9/10</small></h4><p><b>Added</b>BM25 next to the vector search.</p><p><b>Fixes</b>Item 5. Item 7 still fails.</p></li>
+        <li><h4>A LangGraph flow with a citation check <small>9/10</small></h4><p><b>Added</b>The flow and the guard.</p><p><b>Fixes</b>Nothing here: the check passed first time on all ten. It is insurance, not an improvement.</p></li>
+        <li><h4>Board seats from Neo4j <small>10/10</small></h4><p><b>Added</b>The graph, and one fact line in the prompt.</p><p><b>Fixes</b>Item 7: five boards, AGAINST. Item 8, with exactly four, stays FOR.</p></li>
+        <li><h4>A second prompt version <small>10/10</small></h4><p><b>Added</b>A system message and tagged data blocks.</p><p><b>Shows</b>Both versions scored 10/10 in three runs out of three. The new one was adopted for its defence against injected text, at a cost in tokens.</p></li>
+        <li><h4>A different model provider <small>9/10, then 10/10</small></h4><p><b>Changed</b>The model, by one setting.</p><p><b>Shows</b>One item was voted wrongly while the model's own written reason was right, because the vote field came before the reason field. Reason first fixed it.</p></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>The two apps, side by side</h2>
+      <table>
+        <tr><th></th><th>The docs assistant (this book)</th><th>The voting assistant</th></tr>
+        <tr><td><strong>Input</strong></td><td>A question in free text</td><td>One agenda item: a title and a short text</td></tr>
+        <tr><td><strong>Output</strong></td><td>A sentence and a source</td><td>A vote, the ID of one rule, a reason</td></tr>
+        <tr><td><strong>Shape</strong></td><td>Questions over documents</td><td>Classification with a citation</td></tr>
+        <tr><td><strong>Documents</strong></td><td>A handbook, 14 chunks</td><td>A policy, 11 rules</td></tr>
+        <tr><td><strong>Search</strong></td><td>Vector + keyword, fused, reranked</td><td>Vector + keyword, fused</td></tr>
+        <tr><td><strong>Graph</strong></td><td>An org chart: who reports to whom</td><td>Board seats: who sits on which board</td></tr>
+        <tr><td><strong>Flow</strong></td><td>A router and three branches</td><td>One straight path with a retry loop</td></tr>
+        <tr><td><strong>Eval</strong></td><td>12 questions: right chunk first</td><td>10 items: right vote and right rule</td></tr>
+        <tr><td><strong>Around it</strong></td><td>Command-line scripts</td><td>A web app, a run log, a prompt registry, tests</td></tr>
+      </table>
+
+      <h3>What the second app confirms</h3>
+      <div class="qlist rules nq wide">
+        <div><q>Vector search misses exact terms; keyword search finds them.</q><small>One item fixed by the keyword "PEP".</small></div>
+        <div><q>Some facts are in relationships, and no text search will find them.</q><small>A count of board seats, from the graph.</small></div>
+        <div><q>Let the database answer the exact question and hand the model a finished fact.</q><small>"Sits on 5 boards", not a list to count.</small></div>
+        <div><q>Reason first, then the verdict.</q><small>Same model, same facts, a wrong vote until the field order changed.</small></div>
+        <div><q>A model switch is a dependency upgrade: rerun the evals.</q><small>9/10 on the first run after switching.</small></div>
+        <div><q>One run is a sample.</q><small>Prompt versions were compared over three runs each.</small></div>
+        <div><q>A check that never fires still has to earn its place.</q><small>The citation check is recorded as "insurance, not a fix".</small></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li>Written from one build of this design: its policy, sample agenda, board data and test cases, its engine code (search, graph facts, flow), its active prompt, and its recorded eval scores.</li>
+          <li>The ten votes shown are the test cases' expected answers; that build reproduced them 10/10 in its evals. The step-through of item 7 follows the code; which three rules the search returns for that item was not printed.</li>
+          <li>The agenda, the company, the people and the policy are all made up.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

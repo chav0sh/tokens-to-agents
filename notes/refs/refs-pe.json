@@ -1,0 +1,170 @@
+{
+  "PE-2": {
+    "chapter": "Understanding LLMs",
+    "about": "Explains how an LLM works from the outside in: a mimic of text, tokens, one-token-at-a-time generation, sampling with temperature, and a light look at the transformer. It keeps to what a prompt writer needs and skips the maths.",
+    "ideas": [
+      "An LLM is a document completion engine. Text goes in, text comes out, and the model imitates the kinds of documents it was trained on.",
+      "Every model has its own fixed tokenizer. Length, speed, price and the context window are all measured in tokens, so count them with that tokenizer.",
+      "The model writes one token at a time and cannot pause, backtrack or take a token back. Any checking or retrying has to be built by you.",
+      "Temperature 0 is for correctness and near-repeatable output. Higher values give variety, and values above 1 get worse the longer the text runs.",
+      "Logprobs show the probability the model gave each token, which you can use as a rough confidence signal.",
+      "The model reads the prompt once, from start to end, so the order of the prompt matters."
+    ],
+    "read_when": "Read it when you want a mental model for odd behaviour such as repetition, running out of context, or different answers on every run.",
+    "sections": {
+      "Counting Tokens": "Each model has a fixed tokenizer, so you count tokens with the matching one. The count sets reading time, generation time, cost and the context window, which must hold the prompt and the completion together. English averages about four characters per token, while other languages, digit strings and keys cost more tokens per character.",
+      "One Token at a Time": "The model predicts one token, adds it to the prompt and predicts again, which is called autoregressive generation. It cannot stop to think or erase a token, and it can lock into a repeating pattern it started by chance. The advice is to detect and filter repetitive output or add some randomness.",
+      "Temperature and Probabilities": "The model scores every possible token and then a sampling step picks one. Temperature 0 takes the likeliest token and suits cases where correctness matters, though results are still not perfectly deterministic. Around 1 the output follows the training data's spread, and above 1 it turns erratic. Higher temperatures make sense when you generate several candidates and filter them."
+    }
+  },
+  "PE-3": {
+    "chapter": "Moving to Chat",
+    "about": "Shows how base models became chat and tool-calling assistants through human-feedback tuning and the ChatML format, and how the API changed to match. Its point is that a chat model is still completing a document, now a transcript.",
+    "ideas": [
+      "A base model only completes documents and can imitate anything on the internet, so fine-tuning turns it into a helpful, honest and safe assistant.",
+      "Models are trained to follow the system message closely, so it is the place for rules and persona.",
+      "Role markers are reserved tokens that users cannot type through the chat API, which blocks forged system or assistant messages. This only holds if you keep user and retrieved text out of the system message.",
+      "Chat tuning has costs: chattier answers, a possible drop in other skills (the alignment tax) and less variety. A plain completion API is still better when you want the raw answer with nothing to parse out.",
+      "Two conversations exist: user with assistant, and your app with the model. The app can add context the user never sees, which the book compares to writing a play.",
+      "Tool calling is the same trick again: the transcript just gains a special syntax for requesting a function and getting its result."
+    ],
+    "read_when": "Read it when you build on a chat API and want to know what the roles really do, why the system message matters for safety, or whether a completion model would fit better.",
+    "sections": {
+      "Chat Completion API": "Shows a basic call with a system message and a user message, and the JSON reply, which includes finish reason and token usage. Warns against putting the user's request or retrieved file text into the system message, because that gives up the protection the special tokens provide. Lists useful parameters: max_tokens, stop, stream, logprobs, n and temperature, with temperature the most important for prompt work."
+    }
+  },
+  "PE-4": {
+    "chapter": "Designing LLM Applications",
+    "about": "Frames an LLM application as a loop that turns the user's problem into a document for the model and turns the completion back into something useful. It then shows how the loop grows with state, outside content, reasoning and tools, and ends with evaluation.",
+    "ideas": [
+      "The app is a transformation layer between the user's domain and the model's text domain. The loop may run once or many times.",
+      "A good prompt meets four needs: it resembles training documents (the Little Red Riding Hood principle), holds all relevant information, steers the model to an answer, and has a natural stopping point.",
+      "The feedforward pass has four steps: retrieve context, cut it into snippets, score and prioritise the snippets, and assemble them within the token budget.",
+      "Complexity grows along four lines: stored state, external content (RAG), deeper reasoning and tool use.",
+      "Models make mistakes, so tools that change the real world need care, such as asking the user before a booking.",
+      "Evaluate before launch and keep measuring after launch."
+    ],
+    "read_when": "Read it first, before the technique chapters, to get the overall shape of an LLM app and a place to hang each later technique.",
+    "sections": {
+      "The Anatomy of the Loop": "Describes the app as a loop between the user domain and the model domain and walks once around it. The prompt must look like familiar documents, include all relevant facts, lead to an answer and make the model stop; a travel recommendation written as a homework sheet shows all four. The completion then goes back to the user as text, parsed data or a function call, and the choice of model size trades quality against cost and latency.",
+      "Exploring the Complexity of the Loop": "Starts from a stateless single-call app and lists four ways it grows. Chat needs stored history, which you truncate or summarise when it gets long. Outside knowledge comes from retrieval. Reasoning improves if the model thinks out loud first, since it has no inner monologue. Tools let it search or act, and write actions need extra caution."
+    }
+  },
+  "PE-5": {
+    "chapter": "Prompt Content",
+    "about": "Covers where prompt content comes from, split into static content that clarifies the task and dynamic content gathered for each request. Most pages go to few-shot examples, finding context, retrieval (RAG) and summarisation.",
+    "ideas": [
+      "Static content is hardcoded text that defines the task. Dynamic content is fetched per request and describes this particular case.",
+      "Clarifying the question makes the model treat every input the same way. Ask for what you want, give a reason, and avoid absolutes.",
+      "Few-shot examples teach format and style well, but they scale badly with long context, anchor the model on your examples and can plant accidental patterns.",
+      "Gather more context than you need and score each item, thinking about latency, what can be prepared in advance, and whether items can be compared.",
+      "Irrelevant retrieved text gets over-interpreted by the model (the Chekhov's gun fallacy), so retrieval quality matters.",
+      "Summarise with the final task in mind, and use hierarchical summaries for text that exceeds the context window."
+    ],
+    "read_when": "Read it when you decide what goes into a prompt: how to write instructions and examples, what context to fetch and how to retrieve it.",
+    "sections": {
+      "Static Content": "Static content is the fixed text that states and clarifies the task. The book says clarifying the question is harder and more important than people expect, because it makes the model handle all inputs the same way. Its rules of thumb are to ask for positives instead of negatives, to add a reason to each command, and to avoid absolutes; in chat models the system message is the place for these instructions.",
+      "Few-Shot Prompting": "Examples show the model the format, style and unstated rules, which is often easier than writing them out, and they work especially well for output format. Three drawbacks: they scale poorly when each case carries a lot of context, they bias the model toward the spread of your examples, and they can suggest false patterns such as order. The advice is to cover every main class and edge case, shuffle the examples, test the choice, and skip them if the task is already clear.",
+      "Dynamic Content": "Dynamic content is the per-request context, and gathering it is where most design time goes. Three things shape it: latency, whether you can prepare it ahead, and whether items can be compared with a score. To find sources, mind-map what the model would like to know, list what the app can actually get, and sort that list by closeness to the app and by how stable it is.",
+      "Retrieval-Augmented Generation": "RAG means fetching relevant snippets and putting them in the prompt. Irrelevant snippets can mislead the model, so retrieval is treated as a search problem. It compares word-matching search (Jaccard, TF-IDF, BM25), which is simple and easy to debug, with embedding search, which matches meaning but is opaque. It also covers cutting documents into overlapping chunks, choosing an embedding model and a vector store, and a small worked example."
+    }
+  },
+  "PE-6": {
+    "chapter": "Assembling the Prompt",
+    "about": "Shows how to arrange the gathered pieces into one prompt: the shape of a good prompt, which kind of document to imitate and how to format snippets. It ends by treating assembly as choosing which pieces fit in the token budget.",
+    "ideas": [
+      "A good prompt runs from an introduction through context to a refocus that repeats the question (the sandwich) and a transition that begins the answer.",
+      "The end of the prompt has the most influence and the start is recalled well. The early middle is used least, which the book calls the Valley of Meh.",
+      "Pick a document type for the prompt: an advice conversation, an analytic report or a structured document.",
+      "Elastic snippets keep several lengths of the same content, so the assembler asks which is the largest version that fits.",
+      "Prompt elements relate by position, importance (scores or priority tiers) and dependency (requirements and incompatibilities).",
+      "Start with a minimal prompt builder that keeps the end of your content, then move to a greedy add-or-remove method as the app grows."
+    ],
+    "read_when": "Read it when you write the code that turns instructions and retrieved context into the final prompt, especially under a token limit.",
+    "sections": {
+      "Anatomy of the Ideal Prompt": "Lays out the parts of a prompt: an introduction that sets up the task, a run of context elements, a refocus that restates the main question, and a transition that starts the answer. Models weight the end most and the early middle least (the Valley of Meh), so key items belong outside it. It then compares document types: advice conversation, analytic report and structured document.",
+      "Elastic Snippets": "One piece of content can be included at many sizes, from the bare passage to the passage with lots of surrounding text. Instead of asking whether a snippet fits, the assembler asks for the biggest version that fits. The alternative is to create separate overlapping elements and mark them as incompatible so only one is used.",
+      "Putting It All Together": "Treats prompt assembly as an optimisation problem: choose the elements with the most value while respecting requirements, incompatibilities and a token budget (the context window minus room for the reply). No standard tool solves it, so you write your own. Begin with a minimal builder that takes the end of the content, then use a greedy method that adds the best element each step or removes the weakest."
+    }
+  },
+  "PE-7": {
+    "chapter": "Taming the Model",
+    "about": "Looks at the completion side: what a good response looks like, how to find and cut it, and how to read the model's confidence from logprobs. The second half is a practical guide to choosing and fine-tuning a model.",
+    "ideas": [
+      "A completion has a preamble, the main answer and a postscript. Preambles cost tokens but are worth keeping when they hold chain-of-thought reasoning.",
+      "Make the start and end of the answer easy to recognise, and use stop sequences so you do not pay for tokens you will discard.",
+      "For classification, give each option a different first token, because options that share a first token add up their probabilities and can win unfairly.",
+      "You can calibrate a classifier by shifting logprobs by a constant, and many APIs offer logit bias for this.",
+      "Choose a model by weighing quality, latency, cost, hosting effort and features, and do not hardcode the choice.",
+      "Fine-tuning comes in kinds: full, LoRA and soft prompting. LoRA mostly teaches format, style and priors rather than new skills."
+    ],
+    "read_when": "Read it when you need to parse model output reliably, stop rambling, use the model as a classifier, or choose between hosted, open source and fine-tuned models.",
+    "sections": {
+      "Choosing the Model": "Recommends not baking the model choice into your code, because the market moves fast and a unifying API such as LiteLLM helps. It weighs answer quality, latency, cost, hosting effort, capabilities and non-negotiable preferences such as data location. It says to pick the smallest model that does the job, prototype with a slightly larger one, and self-host open models only at scale. It ends with fine-tuning: full, LoRA and soft prompting, and a revised Little Red Riding Hood rule that your prompt should look like the fine-tuning documents and not like the original training ones."
+    }
+  },
+  "PE-8": {
+    "chapter": "Conversational Agency",
+    "about": "Shows how to give a chat model abilities beyond talking: calling tools, reasoning before answering, and keeping the right context in a long conversation. It ends by building a small working agent and discussing the user interface for it.",
+    "ideas": [
+      "A bare model has no private or current data, is weak at maths and cannot act. Tools fix all three.",
+      "The application owns the tool loop: it parses the call, runs the real function and appends the result to the messages.",
+      "Tool definitions should be few, simple and well named, with few arguments. Remove arguments the app already knows, and return useful error messages.",
+      "For risky tools, let the model request the action but have the application ask the user before running it. Asking the model to check first is not reliable.",
+      "Having the model reason before it answers (chain of thought, ReAct) usually gives better results, because it has no inner monologue.",
+      "An agent's context has a preamble, prior conversation, attached artifacts and the current exchange. Deciding what to include is a trade-off between confusion and missing information."
+    ],
+    "read_when": "Read it when you add tools to an assistant, build the loop that lets the model call functions, or need design rules for tool definitions.",
+    "sections": {
+      "Chain of Thought": "The model has no inner monologue, so an answer given first is a guess and the explanation after it is a rationalisation. Making it reason before answering, either with few-shot examples or with a cue such as asking for step-by-step thinking, raised accuracy in the cited studies, for example on math word problems from about 20 percent to 60 percent. A related idea trained models to use blank pause tokens to buy thinking time.",
+      "Tool Usage": "Explains why a model needs tools: it lacks private and current information, is poor at arithmetic and cannot change anything in the world. The fix is to tell it which tools exist and when to use them, while the application parses the call, runs the real API and puts the result into the next prompt. A small thermostat example shows tool definitions as JSON schema and a function that handles messages and tool calls.",
+      "LLMs Trained for Tool Usage": "Shows that tool calling is a fine-tuned model plus API convenience and is still document completion. Tool definitions are placed in the system message as TypeScript-like text, so they count against the token budget. A call is a chain of small decisions: who speaks, whether to call a tool, which tool, which arguments and values, and when to stop.",
+      "Guidelines for Tool Definitions": "Give the model few tools that split the domain cleanly, and do not paste your whole web API into the prompt. Use clear names, short definitions and few simple arguments. Watch for made-up argument values such as placeholder names, and remove or default arguments the app already knows. Keep tool outputs lean, make error messages explain what to fix, and for dangerous tools intercept the call in the application and get the user's approval.",
+      "ReAct: Iterative Reasoning and Action": "ReAct is a loop of thought, action and observation: the model writes a thought, calls a tool such as search, lookup or finish, reads the result and repeats until it finishes. In the original study it first did worse than plain prompting because the examples did not teach tool use well, then led after light fine-tuning. Thinking before acting matters most in decision tasks where the agent must track a goal.",
+      "Building a Conversational Agent": "Observes that the thermostat example is nearly an agent already. Two things are missing: a way for the user to type to it, and a loop around the message-processing function.",
+      "Managing Conversations": "Presents the loop that holds the full message list, reads user input, runs the model and any tool calls until the assistant replies, then waits for the next input. Because it keeps the prior conversation, the agent can undo its own earlier change, as the sample dialogue shows. Swapping the system message and tools changes its behaviour, but real use also needs an API, error handling and logging."
+    }
+  },
+  "PE-9": {
+    "chapter": "LLM Workflows",
+    "about": "Argues that a complex job is better done by a fixed workflow of small tasks than by one free-roaming agent, and shows how to design one. It then covers more advanced designs where the model itself directs the flow.",
+    "ideas": [
+      "There is a trade-off between generality and strength. A narrow, structured workflow can finish complex tasks that a general chat agent cannot.",
+      "A conversational agent fails on a large multistep job: it cannot do the work, produces generic output, gets distracted by a long prompt and is hard to debug.",
+      "Define each task with a clear input and output schema and test it alone. Modular tasks make failures easy to locate.",
+      "Do not use an LLM where ordinary code works. Use a cheap model for easy tasks and a human check for actions that cannot be undone.",
+      "Prefer a pipeline or a DAG. Add cycles only when needed, with a retry limit, and keep any loops inside a task.",
+      "Use a basic workflow first. Let the LLM steer the flow only when the problem needs that freedom."
+    ],
+    "read_when": "Read it when a job has several steps such as extract, decide, write and send, and you are choosing between one agent and a fixed pipeline, or designing the tasks and their data shapes.",
+    "sections": {
+      "Would a Conversational Agent Suffice?": "Tries the Shopify plug-in marketing job with a conversational agent and shows it failing in stages. With no tools it only writes a plan, with search and email tools it sends generic form letters, and with a long system message it gets distracted. It also has no way to process work in units and is hard to fix when something fails. The conclusion is to split the job into tasks inside a workflow.",
+      "Basic LLM Workflows": "Gives five steps: define the goal, specify tasks, implement tasks, implement the workflow, then optimise. Each task needs well-defined inputs and outputs, and can be a prompt template, a forced tool call that extracts structured data, or a task with chain of thought or a self-correction pass. Some tasks need no LLM at all, and some need a human or a different model size.",
+      "Advanced LLM Workflows": "Lets the model direct the flow. Options are a workflow agent with tools that map to tasks, tasks that are themselves agents, tasks created on the fly, and a growing task list the agent keeps reprioritising. The book warns that more autonomy makes the system less stable and harder to reason about, so try a basic workflow first.",
+      "Assembling the Workflow": "Describes tasks connected as a state machine. A pipeline is simplest, a DAG lets later tasks reuse earlier results, and a cyclic graph allows retry loops but adds complexity such as attempt counters and carrying data back. It advises hiding loops inside a task, and notes batch processing is simpler than streaming.",
+      "Stateful Task Agents": "Gives each work item its own long-lived agent that changes the item and tells dependent agents when something changes, as with files of a web page. A workflow agent can orchestrate them, or you can build a dependency graph, taking care with circular dependencies. Users can also talk to the agent that owns an item.",
+      "Example Workflow: Shopify Plug-in Marketing": "Builds the four tasks: collect storefront pages, extract details with specific questions, brainstorm and then write a plug-in concept in two steps, and write the email after planning a strategy. The output was decent. Suggested improvements are more variety in ideas, a feasibility check, a Reflexion feedback step, offline test examples for each task, and recording real traffic for A/B tests."
+    }
+  },
+  "PE-10": {
+    "chapter": "Evaluating LLM Applications",
+    "about": "Explains how to test an LLM app before launch and after, starting from the claim that evaluation should be the first code you write. It covers how to find examples, how to score free-text answers, and how to learn from real users.",
+    "ideas": [
+      "Build evaluation first. It tells you whether each change is a step forward, so everything else moves faster.",
+      "Offline evaluation is safe, scales and exists before launch. Online evaluation tests on real users and is the final proof.",
+      "Test the whole loop like a regression test, and also test critical single model passes like unit tests. Record latency and token use in every test.",
+      "Start with an example suite of 5 to 20 inputs that you compare by eye, then grow it with mined records, app data or LLM-generated samples.",
+      "Score by matching a gold standard, by functional checks, or by an LLM judge, from easiest to hardest. A judge should grade a third party and should be checked against human agreement.",
+      "In an online A/B test, pick metrics tied to real value, such as acceptance or impact, and add guardrail metrics for failures."
+    ],
+    "read_when": "Read it before you ship or change an LLM feature, when you need a plan for testing prompts, scoring free-text answers or comparing versions on real users.",
+    "sections": {
+      "What Are We Even Testing?": "Evaluation can target the model, a single prompt interaction, or the whole application. It recommends whole-loop tests like regression tests plus unit-style tests of the critical single passes, and which you lean on depends on whether you are swapping models, tuning prompts or changing the architecture. Latency and token counts should be recorded in all of them.",
+      "Offline Evaluation": "Offline evaluation means running examples without live users, and the section advises starting simple. You need a source of example inputs and a way to judge outputs, and the section ends with questions to ask about each source and each kind of test.",
+      "Example Suites": "The simplest harness is 5 to 20 representative inputs, a script that builds the prompts and gets completions, and a way to compare output between prompt versions, such as files in version control. It gives no automatic pass or fail, so you judge differences by eye. It can start before you have any quality criteria, and the book illustrates it with pull request summaries at GitHub.",
+      "Evaluating Solutions": "Gives three scoring methods, easiest first. Matching a gold standard works for yes or no and classification answers, and partial matching checks one key aspect such as whether the right tool was called. Functional tests run or parse the output, for example running a code suite. The last is asking an LLM to judge, which gives relative rather than absolute quality, works best when it grades a third party, and should be checked against human raters.",
+      "SOMA Assessment": "SOMA is the book's recipe for reliable LLM grading: Specific questions, Ordinal scales whose levels are described instead of yes or no, and Multiple Aspects such as intent and execution, or relevance, truth and completeness. It says to split vague questions like 'just right' into two, and to state the criteria before showing the item to grade. Trust it only after checking that adding the model to a pool of human raters does not increase disagreement.",
+      "Online Evaluation": "Online evaluation tests with real users, usually through A/B tests with chosen metrics and guardrail metrics. It ranks five kinds of metric from direct feedback to incidental ones such as latency, with functional correctness, acceptance and impact in between. Thumbs buttons are sparse and biased, so look first for an acceptance or impact metric. Online tests have little bandwidth, so only test ideas that already survived offline."
+    }
+  }
+}

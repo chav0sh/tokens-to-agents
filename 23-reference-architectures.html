@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference architectures · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow">Part 5 · Designing the system · Chapter 23</p>
+    <h1>Reference architectures</h1>
+    <p class="lead">The docs assistant is one shape of AI product. This chapter applies the method from
+      chapter 22 to four others. None is built here: they are designs on paper, the kind you would bring to a
+      planning meeting. Notice how different they are, and how the same seven questions produce each one.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow">The problem</p>
+      <h2>"Chat over documents" is not the only AI product</h2>
+      <p>Because RAG chatbots are the usual tutorial, it is easy to see every problem as one. Many of the most
+        useful AI features have no chat window, no retrieval, or no conversation. Recognising the shape of a
+        problem is most of the design.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow">The picture</p>
+      <h2>Four products, four shapes</h2>
+      <div class="cards two wide">
+        <div class="card retrieval"><span class="kind">Design 1</span><h4>Support bot</h4>
+          <dl class="facts"><dt>In</dt><dd>A customer's message</dd><dt>Out</dt><dd>An answer with a link, or a hand-off</dd><dt>Steps</dt><dd><span class="badge meaning">Workflow</span></dd><dt>Model</dt><dd>Small</dd></dl>
+          <p class="minus">Risk: a confident wrong answer to a customer.</p><p class="plus">Defence: sources, and handing off when unsure.</p></div>
+        <div class="card model"><span class="kind">Design 2</span><h4>Document extraction</h4>
+          <dl class="facts"><dt>In</dt><dd>A PDF invoice</dd><dt>Out</dt><dd>A validated record</dd><dt>Steps</dt><dd><span class="badge meaning">Fixed pipeline</span></dd><dt>Model</dt><dd>Small</dd></dl>
+          <p class="minus">Risk: a wrong amount booked.</p><p class="plus">Defence: validation in code, a review queue.</p></div>
+        <div class="card flow"><span class="kind">Design 3</span><h4>Questions to SQL</h4>
+          <dl class="facts"><dt>In</dt><dd>A question about business data</dd><dt>Out</dt><dd>A query, a table, a sentence</dd><dt>Steps</dt><dd><span class="badge meaning">Pipeline + one retry</span></dd><dt>Model</dt><dd>Large</dd></dl>
+          <p class="minus">Risk: a plausible, wrong number.</p><p class="plus">Defence: read-only access, showing the query.</p></div>
+        <div class="card reliability"><span class="kind">Design 4</span><h4>An agent that acts</h4>
+          <dl class="facts"><dt>In</dt><dd>A request to get something done</dd><dt>Out</dt><dd>Actions in other systems</dd><dt>Steps</dt><dd><span class="badge exact">Agent loop</span></dd><dt>Model</dt><dd>Large</dd></dl>
+          <p class="minus">Risk: a wrong action carried out.</p><p class="plus">Defence: narrow permissions, confirmation.</p></div>
+      </div>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow">How it works</p>
+      <h2>The four designs</h2>
+      <p>Each one: the flow, what the user sees, what the model can call, where the data lives, what it costs,
+        and the decisions that matter.</p>
+
+      <div class="map wide">
+        <div class="band"><h3>1. A customer support bot <small>answers from the help centre, hands over when it should</small></h3>
+          <ol class="steps">
+            <li class="node plain"><b>Message</b></li>
+            <li class="node reliability"><b>Input guard</b></li>
+            <li class="node flow"><b>Route</b><span>how-to · my account · upset or unclear</span></li>
+            <li class="fork"><div class="node retrieval"><b>Search help articles</b><span>hybrid + rerank</span></div><div class="node flow"><b>Look up the account</b><span>by the logged-in customer</span></div></li>
+            <li class="node model"><b>Answer</b><span>with a link to the article</span></li>
+            <li class="node reliability"><b>Check</b><span>real source? supported?</span></li>
+            <li class="node plain"><b>Reply, or hand off</b></li>
+          </ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>A chat widget with a way to reach a person. Staff receive hand-offs with a summary.</dd></div>
+            <div><dt>Tools</dt><dd>Look up the account or order, open a ticket, hand off.</dd></div>
+            <div><dt>Database</dt><dd>Help articles in a hybrid search index. Accounts stay in their own system.</dd></div>
+            <div><dt>Budget</dt><dd>Two small-model calls, about 2 s. $0.000965 per message: about $48 for 50,000 a month.</dd></div>
+          </dl>
+          <ul class="decisions">
+            <li><strong>A workflow, not an agent.</strong> The kinds of request are known, and cost and behaviour must be predictable in front of customers.</li>
+            <li><strong>Handing off is a designed path, not a failure.</strong> Upset customers, unclear requests and answers that fail the check go to a person. A bot that never gives up is the worst support experience.</li>
+            <li><strong>The account lookup uses the session's customer ID,</strong> never a name or number typed into the chat. Otherwise anyone can ask about anyone.</li>
+            <li><strong>Eval: past tickets with their correct resolution.</strong> Measure "would this have resolved it?" and, separately, "did it hand off when it should?".</li>
+          </ul></div>
+
+        <div class="band"><h3>2. Document extraction <small>reads incoming invoices, produces records for accounting</small></h3>
+          <ol class="steps">
+            <li class="node plain"><b>PDF arrives</b><span>in a queue</span></li>
+            <li class="node retrieval"><b>Get the text</b><span>parser or OCR</span></li>
+            <li class="node model"><b>Extract</b><span>structured output: supplier, date, lines, totals</span></li>
+            <li class="node reliability"><b>Validate in code</b><span>lines add up? date sane? supplier known?</span></li>
+            <li class="fork"><div class="node plain"><b>Save the record</b><span>checks passed</span></div><div class="node reliability"><b>Review queue</b><span>a person corrects it</span></div></li>
+          </ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>None for most documents. A review screen for the ones that fail a check.</dd></div>
+            <div><dt>Tools</dt><dd>None. A batch pipeline, like any import job.</dd></div>
+            <div><dt>Database</dt><dd>Your accounting database. No vector index, no graph.</dd></div>
+            <div><dt>Budget</dt><dd>One small-model call per document, nobody waiting. $0.00135 per invoice: $27 for 20,000 a month.</dd></div>
+          </dl>
+          <ul class="decisions">
+            <li><strong>No chat, no retrieval, no agent.</strong> One document in, one record out.</li>
+            <li><strong>The schema is the prompt.</strong> Field names and descriptions tell the model what to find. Structured output guarantees the shape, not the values.</li>
+            <li><strong>Arithmetic and lookups are code.</strong> "Do the lines sum to the total?" and "is this supplier known?" are exact checks that catch most model mistakes for free.</li>
+            <li><strong>Corrections become eval cases.</strong> The eval is field-by-field accuracy against a few hundred hand-checked invoices.</li>
+          </ul></div>
+
+        <div class="band"><h3>3. Questions to SQL <small>"what was revenue per region last quarter?"</small></h3>
+          <ol class="steps">
+            <li class="node plain"><b>Question</b></li>
+            <li class="node retrieval"><b>Find the tables</b><span>search table and column descriptions</span></li>
+            <li class="node model"><b>Write the SQL</b><span>schema + example queries in the prompt</span></li>
+            <li class="node reliability"><b>Validate</b><span>parses? SELECT only? allowed tables?</span></li>
+            <li class="node flow"><b>Run it</b><span>read-only, replica, timeout</span></li>
+            <li class="node plain"><b>Show</b><span>the table, and the query</span></li>
+          </ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>A question box in a dashboard or chat. It shows the result and the SQL that produced it.</dd></div>
+            <div><dt>Tools</dt><dd>One: run a query, as a read-only user.</dd></div>
+            <div><dt>Database</dt><dd>The SQL database you have. A small search index over table and column descriptions.</dd></div>
+            <div><dt>Budget</dt><dd>One large-model call. $0.012 per question: $60 for 5,000 a month.</dd></div>
+          </dl>
+          <ul class="decisions">
+            <li><strong>Retrieval is over the schema, not the data.</strong> Good column descriptions matter more than the model.</li>
+            <li><strong>Permissions are the control.</strong> The query is written by a model from a stranger's text, so the database user can only read, on a replica, with a time limit.</li>
+            <li><strong>The query is shown.</strong> A wrong join gives a believable wrong number. Showing the SQL lets someone check it.</li>
+            <li><strong>One retry on a database error,</strong> with the error in the prompt. A small evaluator loop (<a href="13-workflows-and-agents.html">chapter 13</a>).</li>
+            <li><strong>Eval: compare the rows, not the SQL text.</strong> Many different queries are correct.</li>
+          </ul></div>
+
+        <div class="band"><h3>4. An agent that acts <small>an IT helpdesk: "I can't get on the VPN"</small></h3>
+          <ol class="steps">
+            <li class="node plain"><b>Request</b></li>
+            <li class="node model"><b>Model: what next?</b></li>
+            <li class="fork"><div class="node flow"><b>Read tools</b><span>user, device, past tickets, runbooks</span></div><div class="node reliability"><b>Write tools</b><span>only after a person confirms</span></div></li>
+            <li class="node model"><b>Back to the model</b><span>until done, or a step limit</span></li>
+            <li class="node plain"><b>Summary</b><span>what was done, and the log</span></li>
+          </ol>
+          <dl class="spec">
+            <div><dt>Interface</dt><dd>A chat that shows what it is doing and asks before it changes anything.</dd></div>
+            <div><dt>Tools</dt><dd>Read: look up user, device, tickets; search runbooks. Write: reset access, grant a licence, open a ticket.</dd></div>
+            <div><dt>Database</dt><dd>The systems it acts on, plus a log of every tool call. Runbooks in a search index.</dd></div>
+            <div><dt>Budget</dt><dd>About six large-model calls. $0.09 per request: $180 for 2,000 a month, and tens of seconds each.</dd></div>
+          </dl>
+          <ul class="decisions">
+            <li><strong>An agent, because the steps depend on what it finds.</strong> A VPN problem may be an expired password, a missing group or a broken device.</li>
+            <li><strong>Read tools are free to use; write tools stop for confirmation.</strong> Looking things up is safe to get wrong. Changing access is not.</li>
+            <li><strong>A short allow-list of actions,</strong> each with narrow permissions. The agent can do exactly what its tools allow, whatever any text tells it (<a href="18-guardrails.html">chapter 18</a>).</li>
+            <li><strong>A ceiling on steps and spend,</strong> and every tool call logged: the audit trail and the only way to debug it.</li>
+            <li><strong>Eval: scripted scenarios in a test environment.</strong> Judge the end state and the path: no forbidden action, not too many steps.</li>
+          </ul></div>
+      </div>
+      <p class="caption">Costs use the example prices from chapter 3 ($0.30 and $2.50 per million tokens for the
+        small model, $3 and $15 for the large) and assumed token counts. The agent is by far the most expensive
+        per use, and the hardest to test.</p>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow">Use it when, skip it when</p>
+      <h2>Which shape is yours?</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Recognise the shape by</h3>
+          <ul>
+            <li><strong>Someone asks, facts are in documents:</strong> design 1 and the docs assistant.</li>
+            <li><strong>A document or message comes in, a record goes out:</strong> design 2. Also classification and routing of tickets or emails.</li>
+            <li><strong>Language in, a formal language out</strong> (SQL, a search filter, a config): design 3.</li>
+            <li><strong>A goal, and several systems to act in:</strong> design 4.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Common mis-shapes</h3>
+          <ul>
+            <li>A chat window on top of what should be a form with one smart field.</li>
+            <li>RAG over data that lives in tables. That is design 3 or a plain report.</li>
+            <li>An agent where the steps are the same every time. That is a pipeline.</li>
+            <li>One giant prompt doing extraction, judgement and writing. Split it into steps you can test.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow">The tools</p>
+      <h2>What each design would be built from</h2>
+      <table>
+        <tr><th>Design</th><th>From this book</th><th>New for this design</th></tr>
+        <tr><td>1. Support bot</td><td>Hybrid retrieval, a router, guards, a judge as a check, conversation memory</td><td>The hand-off into your ticketing system</td></tr>
+        <tr><td>2. Extraction</td><td>Structured output, validation in code, evals</td><td>A PDF parser or OCR; a review screen; a job queue</td></tr>
+        <tr><td>3. Questions to SQL</td><td>Retrieval (over schema descriptions), an evaluator loop, a large model</td><td>A SQL parser for validation; a read-only replica</td></tr>
+        <tr><td>4. Agent</td><td>Tools, the agent loop, least privilege, confirmation, logs</td><td>A test environment for the systems it acts on</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow">In the docs assistant</p>
+      <h2>Where the book's app sits among them</h2>
+      <p>The docs assistant is closest to design 1 without the hand-off, with a small piece of design 4 inside
+        it (the HR lookup as a tool). It contains no extraction pipeline and no generated queries: the Cypher in
+        chapter 11 is fixed and written by hand, exactly because generated queries are design 3's risk.</p>
+      <p>Everything in these four designs is assembled from parts you have run. What changes is the arrangement,
+        and where the checks stand.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Pick the design nearest to something you want to build and change one
+          requirement: ten times the volume, or a wrong output that costs real money. Which box changes?</p>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow">From the books</p>
+      <h2>Read more</h2>
+      <p>Each card is a chapter of one of the three source books. Open it to see what that chapter says about this topic.</p>
+      <div class="ref-cards">
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-1" data-sections="Conversational Bots|Information Aggregation|Data Organization|Workflow Automation">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 1 · Introduction to Building AI Applications with Foundation Models</strong>
+          <span class="ref-sections">Conversational Bots · Information Aggregation · Data Organization · Workflow Automation</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-6" data-sections="RAG with tabular data|Agents">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 6 · RAG and Agents</strong>
+          <span class="ref-sections">RAG with tabular data · Agents</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-AIE" data-ref="AIE-2" data-sections="Structured Outputs">
+          <span class="ref-book">AI Engineering</span>
+          <strong>Ch. 2 · Understanding Foundation Models</strong>
+          <span class="ref-sections">Structured Outputs</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+        <button type="button" class="ref-card ref-PE" data-ref="PE-9" data-sections="Example Workflow: Shopify Plug-in Marketing|Advanced LLM Workflows">
+          <span class="ref-book">Prompt Engineering for LLMs</span>
+          <strong>Ch. 9 · LLM Workflows</strong>
+          <span class="ref-sections">Example Workflow: Shopify Plug-in Marketing · Advanced LLM Workflows</span>
+          <span class="ref-open">What it says →</span>
+        </button>
+      </div>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li><strong>These four designs were not built or run.</strong> They are this book's own sketches, assembled from the patterns of earlier chapters. The token counts are assumptions, and the costs are those counts multiplied by the example prices used throughout ($0.30 and $2.50 per million tokens for the small model, $3 and $15 for the large).</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="assets/book-refs.js"></script>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>

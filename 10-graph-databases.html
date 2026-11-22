@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graph databases · Tokens to Agents</title>
+  <link rel="stylesheet" href="shared/book.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main>
+    <p class="eyebrow graphdb">Part 2 · Giving it context · Chapter 10</p>
+    <h1>Graph databases</h1>
+    <p class="lead">A graph database stores things and the connections between them, and makes "follow the
+      connections" the cheap operation. This chapter is the database itself: the model, the query language, and
+      when it beats the SQL you already know. The next chapter plugs it into the assistant.</p>
+
+    <section data-s="problem">
+      <p class="eyebrow graphdb">The problem</p>
+      <h2>Some answers are in the connections, not in the text</h2>
+      <p>Maria asks: <em>"Who has to approve my expense claim of 800 euros?"</em> The search finds the right
+        rule: "Expense claims above 500 euros need a director's approval." Correct, and useless to Maria. She
+        wants a name. Which director? The one above her, which depends on who her manager is, and who that
+        manager reports to. No chunk of the handbook says so. It is in the org chart.</p>
+      <p>You can store an org chart in SQL: an <code>employees</code> table with a <code>manager_id</code>. One
+        level up is a self-join. "Everyone above Maria" needs a join per level, and you don't know how many
+        levels there are:</p>
+      <pre class="code"><code>-- SQL: everyone above Maria, however deep the chain is
+WITH RECURSIVE chain AS (
+    SELECT manager_id, 1 AS levels_up FROM employees WHERE name = 'Maria Lind'
+  UNION ALL
+    SELECT e.manager_id, chain.levels_up + 1
+    FROM employees e JOIN chain ON e.id = chain.manager_id
+    WHERE e.manager_id IS NOT NULL
+)
+SELECT e.name, e.title, chain.levels_up
+FROM chain JOIN employees e ON e.id = chain.manager_id ORDER BY levels_up;</code></pre>
+      <pre class="code"><code>// Cypher, the graph query language: the same question
+MATCH path = (:Person {name: 'Maria Lind'})-[:REPORTS_TO*]->(boss:Person)
+RETURN boss.name, boss.title, length(path) AS levels_up ORDER BY levels_up</code></pre>
+      <p>Both work. The second one reads like the question, and stays that short when the question grows to
+        three kinds of connection.</p>
+    </section>
+
+    <section data-s="picture">
+      <p class="eyebrow graphdb">The picture</p>
+      <h2>Nodes and relationships</h2>
+      <figure class="canvas" aria-label="An org chart as a graph: Maria and Tom report to Jonas, Jonas and Nora to Sara, Sara to Erik; Maria, Tom and Jonas are members of the Platform team">
+        <script type="application/json">{"cols": 4, "still": true, "nodes": [
+          {"id": "erik", "col": 2, "row": 1, "icon": "user", "title": "Erik Dahl", "kind": "graphdb", "sub": "CEO"},
+          {"id": "sara", "col": 2, "row": 2, "icon": "user", "title": "Sara Holm", "kind": "graphdb", "sub": "Director of Engineering"},
+          {"id": "jonas", "col": 2, "row": 3, "icon": "user", "title": "Jonas Berg", "kind": "graphdb", "sub": "Engineering Manager"},
+          {"id": "nora", "col": 4, "row": 3, "icon": "user", "title": "Nora Vik", "kind": "graphdb", "sub": "Engineering Manager"},
+          {"id": "maria", "col": 2, "row": 4, "icon": "user", "title": "Maria Lind", "kind": "graphdb", "sub": "Engineer"},
+          {"id": "tom", "col": 3, "row": 4, "icon": "user", "title": "Tom Ek", "kind": "graphdb", "sub": "Engineer"},
+          {"id": "team", "col": 1, "row": 3, "icon": "org", "title": "Team: Platform", "kind": "plain", "span": 2}
+        ], "edges": [{"from": "maria", "to": "jonas"}, {"from": "tom", "to": "jonas"}, {"from": "jonas", "to": "sara", "label": "REPORTS_TO"}, {"from": "nora", "to": "sara"}, {"from": "sara", "to": "erik"}, {"from": "jonas", "to": "team", "type": "alt"}, {"from": "maria", "to": "team", "label": "MEMBER_OF", "type": "alt"}, {"from": "tom", "to": "team", "type": "alt", "via": "bottom"}]}</script>
+      </figure>
+      <p class="caption">Part of the docs assistant's org chart, as it is stored. The picture on the whiteboard
+        and the data in the database are the same shape. That is the appeal.</p>
+      <table>
+        <tr><th>Piece</th><th>What it is</th><th>In SQL terms</th></tr>
+        <tr><td><strong>Node</strong></td><td>A thing: a person, a team, a document.</td><td>A row.</td></tr>
+        <tr><td><strong>Label</strong></td><td>The kind of node: <code>Person</code>, <code>Team</code>.</td><td>The table name.</td></tr>
+        <tr><td><strong>Relationship</strong></td><td>A named, directed connection between two nodes: <code>REPORTS_TO</code>.</td><td>A foreign key or a join-table row, but stored as a direct link.</td></tr>
+        <tr><td><strong>Property</strong></td><td>A key and value on a node or on a relationship: <code>title: 'CEO'</code>.</td><td>A column.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="how">
+      <p class="eyebrow graphdb">How it works</p>
+      <h2>Cypher: you draw the pattern you are looking for</h2>
+      <p>A Cypher query is a small drawing in text. Round brackets are nodes, square brackets inside an arrow are
+        relationships:</p>
+      <div class="formula">(a:Person)-[:REPORTS_TO]->(b:Person)        a reports to b
+(a)-[:REPORTS_TO*]->(b)                     a reports to b through any number of steps
+(a)-[:MEMBER_OF]->(team)<-[:MEMBER_OF]-(c)  a and c are in the same team</div>
+      <p><code>MATCH</code> finds every place in the graph where the drawing fits. <code>WHERE</code> filters,
+        <code>RETURN</code> picks what comes back: the same roles as in SQL.</p>
+
+      <h3>Four questions, run on the org chart</h3>
+      <table>
+        <tr><th>Question</th><th>Pattern</th><th>Result</th></tr>
+        <tr><td>Who does Maria report to?</td><td><code>(:Person {name: $name})-[:REPORTS_TO]->(boss)</code></td><td>Jonas Berg, Engineering Manager</td></tr>
+        <tr><td>Who is above Maria, at any level?</td><td><code>(:Person {name: $name})-[:REPORTS_TO*]->(boss)</code></td><td>Jonas Berg (1 up), Sara Holm (2 up), Erik Dahl (3 up)</td></tr>
+        <tr><td>Who is the nearest director above her?</td><td>the same, with <code>WHERE boss.title STARTS WITH 'Director'</code>, ordered by path length, <code>LIMIT 1</code></td><td>Sara Holm, Director of Engineering</td></tr>
+        <tr><td>How many people are under Sara?</td><td><code>(p:Person)-[:REPORTS_TO*]->(:Person {name: $name})</code>, <code>count(p)</code></td><td>5</td></tr>
+      </table>
+      <p class="caption">Real results from Neo4j. The star, <code>*</code>, is the part SQL finds hard: "any
+        number of steps".</p>
+
+      <h3>Why following connections is cheap</h3>
+      <p>In a relational database, a join looks rows up through an index, and each extra hop is another lookup
+        against the whole table. A graph database stores, with each node, direct references to its
+        relationships. Going from Maria to her manager is following a pointer. The cost of a query depends on
+        how much of the graph it walks through, not on how big the whole graph is.</p>
+
+      <div class="callout reliability">
+        <p><strong>Parameters, always.</strong> <code>$name</code> is a query parameter, sent separately from
+          the query text. Building Cypher by gluing a user's text into a string is the same injection hole as in
+          SQL.</p>
+      </div>
+    </section>
+
+    <section data-s="when">
+      <p class="eyebrow graphdb">Use it when, skip it when</p>
+      <h2>A graph database is a specialist</h2>
+      <div class="use-skip wide">
+        <div>
+          <h3>Use one when</h3>
+          <ul>
+            <li>The questions are about paths: who is connected to whom, through what, how far away.</li>
+            <li>The depth is unknown or large: reporting lines, dependencies, permissions inherited through groups.</li>
+            <li>There are many kinds of connection and you keep adding more.</li>
+            <li>Typical cases: org charts, access control, fraud rings, recommendations, supply chains, knowledge graphs.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Skip it when</h3>
+          <ul>
+            <li>The data is tables and the questions are sums and filters. That is what SQL is best at.</li>
+            <li>One or two joins answer everything.</li>
+            <li>The hierarchy is small and simple: a recursive query in the Postgres you already run will do.</li>
+            <li>You only want it because "knowledge graph" sounds good. It is one more database to operate.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section data-s="tools">
+      <p class="eyebrow graphdb">The tools</p>
+      <h2>The names in this slot</h2>
+      <table>
+        <tr><th>Kind</th><th>Common names</th><th>Notes</th></tr>
+        <tr><td>Graph databases</td><td><strong>Neo4j (this book)</strong> · Memgraph · Amazon Neptune · LadybugDB (embedded, a fork of Kùzu, which was archived in 2025)</td><td>Neo4j is the best-known, with a free community edition and a browser to look at the graph.</td></tr>
+        <tr><td>In a database you have</td><td>Postgres recursive queries · Apache AGE (Cypher inside Postgres)</td><td>Enough for small graphs.</td></tr>
+        <tr><td>Query languages</td><td><strong>Cypher</strong> (Neo4j, and openCypher elsewhere) · GQL (the ISO standard, close to Cypher) · Gremlin · SPARQL</td><td>Cypher is the one to learn first. SPARQL belongs to RDF triple stores, a different graph model.</td></tr>
+      </table>
+    </section>
+
+    <section data-s="app">
+      <p class="eyebrow graphdb">In the docs assistant</p>
+      <h2>The org chart goes into Neo4j</h2>
+      <p>The org chart is a ten-line CSV, <code>app/org.csv</code>: name, title, team, reports_to. Loading it is
+        two queries:</p>
+      <pre class="code"><code>from neo4j import GraphDatabase
+
+driver = GraphDatabase.driver("bolt://localhost:7688", auth=("neo4j", "tokens-to-agents-local"))
+
+def load_org_chart() -> None:
+    rows = list(csv.DictReader(open("org.csv", encoding="utf-8")))
+    with driver.session() as session:
+        session.run("MATCH (n) DETACH DELETE n")                       # start clean
+        session.run("""
+            UNWIND $rows AS row
+            MERGE (p:Person {name: row.name}) SET p.title = row.title   // MERGE = create if missing
+            MERGE (t:Team {name: row.team})
+            MERGE (p)-[:MEMBER_OF]->(t)
+            """, rows=rows)
+        session.run("""
+            UNWIND $rows AS row
+            MATCH (p:Person {name: row.name}), (m:Person {name: row.reports_to})
+            MERGE (p)-[:REPORTS_TO]->(m)
+            """, rows=[row for row in rows if row["reports_to"]])
+
+def query(cypher: str, **parameters) -> list[dict]:
+    with driver.session() as session:
+        return [record.data() for record in session.run(cypher, **parameters)]</code></pre>
+      <p><code>UNWIND $rows</code> turns the list parameter into rows, like a bulk insert. <code>MERGE</code>
+        makes the load safe to run twice.</p>
+      <div class="callout try">
+        <p><strong>Try it.</strong> Start a throwaway Neo4j, then run the examples:</p>
+        <ol>
+          <li><code>docker run -d --rm --name tta-neo4j -p 127.0.0.1:7688:7687 -e NEO4J_AUTH=neo4j/tokens-to-agents-local neo4j:5.26.32</code></li>
+          <li><code>uv run python app/graph.py</code> loads the org chart and prints the four results above.</li>
+          <li>Add a person to <code>org.csv</code> and write the query for "who shares a manager with them?".</li>
+        </ol>
+      </div>
+    </section>
+
+    <section data-s="books">
+      <p class="eyebrow graphdb">From the books</p>
+      <h2>Read more</h2>
+      <div class="refs">
+        <p class="eyebrow">About this page</p>
+        <ul>
+          <li><strong>None of the three books covers graph databases.</strong> This chapter and the next rest on the tools' own documentation and on code that was run.</li>
+          <li>Neo4j documentation: the <cite>Cypher Manual</cite> (patterns, <code>MATCH</code>, <code>MERGE</code>, variable-length paths) and the Python driver manual.</li>
+          <li>Checked on 2026-11-22 by running <code>app/graph.py</code> against Neo4j 5.26 with the <code>neo4j</code> Python driver. The SQL example at the top was run in SQLite on the same data and returns the same three people.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer id="pager"></footer>
+  </main>
+  <script src="shared/book.js"></script>
+  <script src="assets/book.js"></script>
+</body>
+</html>
